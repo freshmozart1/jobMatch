@@ -43,4 +43,11 @@ describe('LikeContainer', () => {
       'opacity: 0',
     )
   })
+
+  it('renders a stable positioning root for mobile layouts', () => {
+    const wrapper = mount(LikeContainer)
+
+    expect(wrapper.find('.like-container').exists()).toBe(true)
+    expect(wrapper.findAll('.like-container__button')).toHaveLength(2)
+  })
 })

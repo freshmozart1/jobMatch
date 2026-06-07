@@ -48,6 +48,7 @@ function onSwipe() {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: var(--job-card-width);
 }
 
 .job-card-stack__next {
@@ -55,6 +56,7 @@ function onSwipe() {
   top: 0;
   left: 50%;
   z-index: 0;
+  width: var(--job-card-width);
   transform-origin: top center;
   pointer-events: none;
 }
@@ -65,6 +67,8 @@ function onSwipe() {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: var(--match-card-control-gap);
+  width: var(--job-card-width);
 }
 
 .job-card-stack__empty {

@@ -45,11 +45,16 @@ withDefaults(
 <style scoped>
 .like-container {
   box-sizing: border-box;
+  position: sticky;
+  bottom: var(--match-bottom-safe-area);
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 354px;
-  padding: 24px;
+  width: var(--job-card-width);
+  min-height: var(--like-container-height);
+  padding: var(--like-container-vertical-padding) 24px;
+  background: var(--page-background-color, var(--background-color));
 }
 
 .like-container__button {

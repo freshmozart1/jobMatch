@@ -16,10 +16,10 @@ defineProps<{ tags: string[] | undefined }>()
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: center;
-  gap: 24px;
+  gap: 1em;
   width: 100%;
   margin: 0;
-  padding: 24px 24px 12px;
+  padding: 1em 1em 0.5em;
   list-style: none;
 }
 </style>

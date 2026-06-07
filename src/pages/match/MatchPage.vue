@@ -18,9 +18,10 @@ const jobs = jobsData as ScrapedJob[]
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 100svh;
-  padding: 24px 24px 0;
-  background: var(--page-background-color);
+  padding: var(--match-top-padding) var(--match-horizontal-padding)
+    calc(var(--match-bottom-padding) + var(--match-bottom-safe-area));
+  background: var(--page-background-color, var(--background-color));
 }
 </style>

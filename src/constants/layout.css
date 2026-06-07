@@ -1,0 +1,34 @@
+:root {
+  --match-horizontal-padding: 16px;
+  --match-top-padding: 16px;
+  --match-bottom-padding: 12px;
+  --match-card-control-gap: 8px;
+  --match-bottom-safe-area: env(safe-area-inset-bottom, 0px);
+  --like-container-button-size: 48px;
+  --like-container-vertical-padding: 12px;
+  --like-container-height: calc(
+    var(--like-container-button-size) + var(--like-container-vertical-padding) +
+      var(--like-container-vertical-padding)
+  );
+  --job-card-width: min(
+    354px,
+    calc(100vw - var(--match-horizontal-padding) - var(--match-horizontal-padding))
+  );
+  --job-card-height: min(
+    695px,
+    calc(
+      100svh - var(--match-top-padding) - var(--match-bottom-padding) -
+        var(--match-bottom-safe-area) - var(--match-card-control-gap) - var(--like-container-height)
+    )
+  );
+}
+
+@media (min-width: 768px) {
+  :root {
+    --match-horizontal-padding: 24px;
+    --match-top-padding: 24px;
+    --match-bottom-padding: 0px;
+    --match-card-control-gap: 0px;
+    --like-container-vertical-padding: 24px;
+  }
+}

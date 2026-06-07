@@ -27,14 +27,14 @@ defineProps<{ job: ScrapedJob; dragOffsetX?: number; isDragging?: boolean }>()
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 354px;
-  height: 695px;
-  padding: 24px;
+  width: var(--job-card-width);
+  height: var(--job-card-height);
+  min-height: 0;
+  padding: clamp(16px, 4.5vw, 24px);
   border: 1px solid var(--border-color);
   border-radius: 24px;
   box-shadow: 2px 2px 8px 0 var(--box-shadow-color);
   background: var(--background-color);
-  font-family: 'Inter', sans-serif;
   touch-action: pan-y;
   transition: transform 0.3s ease;
 }

@@ -29,6 +29,15 @@ describe('MatchPage', () => {
     expect(wrapper.find('.like-container__button--like').exists()).toBe(true)
   })
 
+  it('renders the mobile layout anchors for the card stack and sticky controls', () => {
+    const wrapper = mount(MatchPage)
+
+    expect(wrapper.find('.match-page').exists()).toBe(true)
+    expect(wrapper.find('.job-card-stack').exists()).toBe(true)
+    expect(wrapper.find('.job-card-stack__current .job-card').exists()).toBe(true)
+    expect(wrapper.find('.job-card-stack__current .like-container').exists()).toBe(true)
+  })
+
   it('increases like and decreases dislike opacity when dragging right', async () => {
     const wrapper = mount(MatchPage)
     dragCurrentCard(wrapper, 160)

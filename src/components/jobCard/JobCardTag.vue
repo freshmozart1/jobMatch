@@ -13,9 +13,7 @@ defineProps<{ tag: string }>()
   justify-content: center;
   padding: 4px 8px;
   border-radius: 8px;
-  font-size: 12px;
   font-weight: 700;
-  line-height: 16px;
   color: var(--tag-text-color);
   text-align: center;
   white-space: nowrap;
