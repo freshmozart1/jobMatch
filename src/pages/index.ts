@@ -1,0 +1,1 @@
+export { default as MatchPage } from './match/MatchPage.vue';

@@ -1,0 +1,13 @@
+:root {
+  --accents-pink: rgba(255, 45, 85, 1);
+  --accents-green: rgba(52, 199, 89, 1);
+  --border-color: rgba(97, 56, 56, 1);
+  --box-shadow-color: rgba(0, 0, 0, 0.4);
+  --text-color: rgba(0, 0, 0, 1);
+  --tag-text-color: rgba(255, 255, 255, 1);
+  --tag-background-color-1: rgba(0, 136, 255, 1);
+  --tag-background-color-2: rgba(52, 199, 89, 1);
+  --tag-background-color-3: rgba(255, 45, 85, 1);
+  --tag-background-color-4: rgba(203, 48, 224, 1);
+  --background-color: rgba(255, 255, 255, 1);
+}
