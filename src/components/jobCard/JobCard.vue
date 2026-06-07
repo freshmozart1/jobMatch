@@ -3,20 +3,7 @@ import JobCardCompany from './JobCardCompany.vue'
 import JobCardDescription from './JobCardDescription.vue'
 import JobCardTags from './JobCardTags.vue'
 import JobCardTitle from './JobCardTitle.vue'
-
-type ScrapedJob = {
-  sourceHostname: string
-  sourceJobId?: string
-  sourceUrl: string
-  title: string
-  company: string
-  location?: string
-  descriptionText?: string
-  postedAt?: string
-  scrapedAt: string
-  tags?: string[]
-  duplicateKey: string
-}
+import type { ScrapedJob } from './types'
 
 defineProps<{ job: ScrapedJob; dragOffsetX?: number; isDragging?: boolean }>()
 </script>

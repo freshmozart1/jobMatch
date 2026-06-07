@@ -1,4 +1,5 @@
-{
+[
+  {
     "sourceHostname": "de.linkedin.com",
     "sourceJobId": "4422110097",
     "sourceUrl": "https://de.linkedin.com/jobs/view/junior-frontend-developer-m-w-d-e-commerce-in-hamburg-at-detlev-louis-motorrad-vertriebsgesellschaft-mbh-4422110097/",
@@ -15,4 +16,41 @@
         "Einzelhandel"
     ],
     "duplicateKey": "linkedin:4422110097"
-}
+  },
+  {
+    "sourceHostname": "de.linkedin.com",
+    "sourceJobId": "4400112233",
+    "sourceUrl": "https://de.linkedin.com/jobs/view/4400112233/",
+    "title": "TechFlow GmbH sucht Backend Engineer (m/w/d) Node.js in Berlin | LinkedIn",
+    "company": "TechFlow GmbH",
+    "location": "Berlin",
+    "descriptionText": "**Du liebst skalierbare Systeme und sauberen Code?**\n\nAls Backend Engineer (m/w/d) baust du bei uns in *Berlin* robuste APIs und Microservices, die täglich Millionen von Requests bedienen.\n\n**Was dich erwartet**\n\n- Arbeit an einer modernen Cloud-Plattform (AWS, Kubernetes).\n- Ein erfahrenes Team mit starker Engineering-Kultur.\n- Viel Eigenverantwortung und Raum für technische Entscheidungen.\n\n**Wir bieten**\n\n- Flexible Arbeitszeiten und Remote-Optionen\n- 30 Tage Urlaub und faires Gehalt\n- Modernes Equipment deiner Wahl\n\n**Deine Aufgaben**\n\n- Du entwickelst und betreibst Backend-Services in Node.js und TypeScript.\n- Du sorgst für Performance, Sicherheit und Zuverlässigkeit unserer APIs.",
+    "postedAt": "Vor 2 Wochen",
+    "scrapedAt": "2026-06-03T09:15:00.000Z",
+    "tags": [
+        "Backend",
+        "Vollzeit",
+        "Node.js",
+        "Cloud"
+    ],
+    "duplicateKey": "linkedin:4400112233"
+  },
+  {
+    "sourceHostname": "de.linkedin.com",
+    "sourceJobId": "4488776655",
+    "sourceUrl": "https://de.linkedin.com/jobs/view/4488776655/",
+    "title": "Pixelwerk AG sucht UX/UI Designer (m/w/d) in München | LinkedIn",
+    "company": "Pixelwerk AG",
+    "location": "München",
+    "descriptionText": "**Du gestaltest Erlebnisse, die Menschen begeistern?**\n\nAls UX/UI Designer (m/w/d) entwickelst du bei uns in *München* intuitive Interfaces für digitale Produkte – von der ersten Idee bis zum finalen Pixel.\n\n**Was dich erwartet**\n\n- Spannende Projekte für namhafte Kunden.\n- Enge Zusammenarbeit mit Product und Engineering.\n- Ein kreatives Umfeld mit modernem Toolset (Figma).\n\n**Wir bieten**\n\n- Hybrides Arbeiten und flexible Zeiten\n- Weiterbildungsbudget und Konferenzbesuche\n- Ein herzliches, interdisziplinäres Team\n\n**Deine Aufgaben**\n\n- Du konzipierst Wireframes, Prototypen und finale UI-Designs.\n- Du führst Nutzerinterviews und Usability-Tests durch.",
+    "postedAt": "Vor 5 Tagen",
+    "scrapedAt": "2026-06-04T11:30:00.000Z",
+    "tags": [
+        "Design",
+        "Vollzeit",
+        "Figma",
+        "Kreativ"
+    ],
+    "duplicateKey": "linkedin:4488776655"
+  }
+]
