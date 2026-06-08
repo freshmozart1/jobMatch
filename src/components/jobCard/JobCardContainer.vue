@@ -55,8 +55,13 @@ const dislikeOpacity = computed(() => {
   return 0.33
 })
 
-function emitDrag() {
-  emit('drag', { progress: progress.value, direction: direction.value })
+function emitDrag(
+  payload: { progress: number; direction: 'left' | 'right' | 'none' } = {
+    progress: progress.value,
+    direction: direction.value,
+  },
+) {
+  emit('drag', payload)
 }
 
 function onPointerDown(event: PointerEvent) {
@@ -89,7 +94,7 @@ function onPointerEnd(event: PointerEvent) {
     const committed = dragOffsetX.value > 0 ? 'right' : 'left'
     committedDirection.value = committed
     dragOffsetX.value = committed === 'right' ? offscreenDistance : -offscreenDistance
-    emit('drag', { progress: 1, direction: committed })
+    emitDrag({ progress: 1, direction: committed })
   } else {
     dragOffsetX.value = 0
     emitDrag()

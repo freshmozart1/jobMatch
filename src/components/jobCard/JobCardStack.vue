@@ -4,6 +4,7 @@ import { JobCard, JobCardContainer } from '@/components'
 import type { ScrapedJob } from './types'
 
 const props = defineProps<{ jobs: ScrapedJob[] }>()
+const emit = defineEmits<{ (e: 'like', job: ScrapedJob, like: boolean): void }>()
 
 const currentIndex = ref(0)
 const dragProgress = ref(0)
@@ -15,7 +16,9 @@ function onDrag(payload: { progress: number; direction: 'left' | 'right' | 'none
   dragProgress.value = payload.progress
 }
 
-function onSwipe() {
+function onSwipe(direction: 'left' | 'right') {
+  console.log(`Swiped ${direction} on job:`, currentJob.value)
+  if (currentJob.value) emit('like', currentJob.value, direction === 'right')
   currentIndex.value += 1
   dragProgress.value = 0
 }

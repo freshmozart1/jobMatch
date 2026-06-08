@@ -47,6 +47,14 @@ function getUniqueUrls(jobLinksByKeyword: LinkedInJobLinksByKeyword): string[] {
   return [...new Set(Object.values(jobLinksByKeyword).flat())]
 }
 
+async function createJob(job: ScrapedJob, like: boolean) {
+  try {
+    await postJson('/jobs/create', { job, like })
+  } catch (error) {
+    console.error('Failed to create job:', error instanceof Error ? error.message : error)
+  }
+}
+
 async function fetchJobs(): Promise<void> {
   isLoading.value = true
   jobs.value = []
@@ -102,7 +110,7 @@ onMounted(() => {
       <p v-if="failedJobPageUrls.length > 0" class="match-page__status match-page__status--warning">
         {{ failedJobPageUrls.length }} job page request failed.
       </p>
-      <JobCardStack :jobs="jobs" />
+      <JobCardStack :jobs="jobs" @like="createJob" />
     </template>
     <p v-else class="match-page__status">Loading jobs...</p>
   </main>
