@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
+import { postJson } from '@/lib/api'
 
 const props = defineProps<{ job: ScrapedJob }>()
 const emit = defineEmits<{ back: [] }>()
@@ -8,17 +9,87 @@ const emit = defineEmits<{ back: [] }>()
 const storageKey = computed(() => 'jobmatch.coverletter.' + props.job.duplicateKey)
 const text = ref('')
 
+type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
+
+// Each upload triggers segmentation + embedding calls on the server, so wait
+// for a real pause in typing before persisting.
+const UPLOAD_DEBOUNCE_MS = 3000
+
+const saveStatus = ref<SaveStatus>('idle')
+const lastUploadedText = ref<string | null>(null)
+let uploadTimer: ReturnType<typeof setTimeout> | null = null
+let uploadInFlight = false
+
 watch(
-  storageKey,
-  (key) => {
+  () => props.job.duplicateKey,
+  (_newKey, oldKey) => {
+    if (oldKey && uploadTimer !== null) {
+      void uploadNow(oldKey, text.value)
+    }
+    lastUploadedText.value = null
+    saveStatus.value = 'idle'
     try {
-      text.value = window.localStorage.getItem(key) ?? ''
+      text.value = window.localStorage.getItem(storageKey.value) ?? ''
     } catch {
       text.value = ''
     }
   },
   { immediate: true },
 )
+
+function clearUploadTimer() {
+  if (uploadTimer !== null) {
+    clearTimeout(uploadTimer)
+    uploadTimer = null
+  }
+}
+
+function scheduleUpload() {
+  clearUploadTimer()
+  if (text.value === lastUploadedText.value) {
+    saveStatus.value = 'saved'
+    return
+  }
+  saveStatus.value = 'pending'
+  uploadTimer = setTimeout(() => void uploadNow(), UPLOAD_DEBOUNCE_MS)
+}
+
+async function uploadNow(jobKey: string = props.job.duplicateKey, snapshot: string = text.value) {
+  clearUploadTimer()
+  const isCurrentJob = () => jobKey === props.job.duplicateKey
+  if (!snapshot.trim()) {
+    if (isCurrentJob()) saveStatus.value = 'idle'
+    return
+  }
+  if (snapshot === lastUploadedText.value || uploadInFlight) return
+  uploadInFlight = true
+  if (isCurrentJob()) saveStatus.value = 'saving'
+  try {
+    await postJson('/cover-letters/upload/text', {
+      coverLetterText: snapshot,
+      jobDuplicateKey: jobKey,
+    })
+    if (isCurrentJob()) {
+      lastUploadedText.value = snapshot
+      saveStatus.value = 'saved'
+    }
+  } catch (error) {
+    if (isCurrentJob()) saveStatus.value = 'error'
+    console.error(
+      'Failed to upload cover letter:',
+      error instanceof Error ? error.message : error,
+    )
+  } finally {
+    uploadInFlight = false
+    if (
+      jobKey === props.job.duplicateKey &&
+      text.value !== snapshot &&
+      text.value !== lastUploadedText.value
+    ) {
+      scheduleUpload()
+    }
+  }
+}
 
 function onChange(e: Event) {
   const v = (e.target as HTMLTextAreaElement).value
@@ -28,9 +99,36 @@ function onChange(e: Event) {
   } catch {
     /* ignore */
   }
+  scheduleUpload()
 }
 
+function handleBack() {
+  void uploadNow()
+  emit('back')
+}
+
+onBeforeUnmount(() => {
+  if (uploadTimer !== null) {
+    void uploadNow()
+  }
+})
+
 const words = computed(() => (text.value.trim() ? text.value.trim().split(/\s+/).length : 0))
+
+const statusLabel = computed(() => {
+  switch (saveStatus.value) {
+    case 'pending':
+      return 'Saving soon…'
+    case 'saving':
+      return 'Saving…'
+    case 'saved':
+      return 'Saved to server'
+    case 'error':
+      return 'Save failed — retrying on next edit'
+    default:
+      return words.value > 0 ? 'Saved as draft' : 'Draft auto-saves as you type'
+  }
+})
 
 type Segment = { text: string; bold: boolean }
 
@@ -53,7 +151,7 @@ function parseDescription(raw: string): Segment[] {
 <template>
   <div class="cl-screen">
     <header class="cl-header">
-      <button type="button" class="cl-header__back" @click="emit('back')">
+      <button type="button" class="cl-header__back" @click="handleBack">
         <svg width="11" height="18" viewBox="0 0 11 18" fill="none" aria-hidden="true">
           <path
             d="M9 2L2 9l7 7"
@@ -95,7 +193,7 @@ function parseDescription(raw: string): Segment[] {
     </div>
 
     <div class="cl-meta">
-      <span>{{ words > 0 ? 'Saved as draft' : 'Draft auto-saves as you type' }}</span>
+      <span>{{ statusLabel }}</span>
       <span>{{ words }} {{ words === 1 ? 'word' : 'words' }}</span>
     </div>
   </div>
