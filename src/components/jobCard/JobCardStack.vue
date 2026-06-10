@@ -4,7 +4,10 @@ import { JobCard, JobCardContainer } from '@/components'
 import type { ScrapedJob } from './types'
 
 const props = defineProps<{ jobs: ScrapedJob[] }>()
-const emit = defineEmits<{ (e: 'like', job: ScrapedJob, like: boolean): void }>()
+const emit = defineEmits<{
+  (e: 'like', job: ScrapedJob, like: boolean): void
+  (e: 'edit', job: ScrapedJob): void
+}>()
 
 const currentIndex = ref(0)
 const dragProgress = ref(0)
@@ -12,12 +15,14 @@ const dragProgress = ref(0)
 const currentJob = computed(() => props.jobs[currentIndex.value])
 const nextJob = computed(() => props.jobs[currentIndex.value + 1])
 
+const nextScale = computed(() => 0.92 + dragProgress.value * 0.08)
+const nextOpacity = computed(() => 0.5 + dragProgress.value * 0.5)
+
 function onDrag(payload: { progress: number; direction: 'left' | 'right' | 'none' }) {
   dragProgress.value = payload.progress
 }
 
 function onSwipe(direction: 'left' | 'right') {
-  console.log(`Swiped ${direction} on job:`, currentJob.value)
   if (currentJob.value) emit('like', currentJob.value, direction === 'right')
   currentIndex.value += 1
   dragProgress.value = 0
@@ -29,7 +34,7 @@ function onSwipe(direction: 'left' | 'right') {
     <div
       v-if="nextJob"
       class="job-card-stack__next"
-      :style="{ transform: `translateX(-50%) scale(${dragProgress})`, opacity: dragProgress }"
+      :style="{ transform: `translateX(-50%) scale(${nextScale})`, opacity: nextOpacity }"
     >
       <JobCard :key="nextJob.duplicateKey" :job="nextJob" />
     </div>
@@ -39,6 +44,7 @@ function onSwipe(direction: 'left' | 'right') {
         :job="currentJob"
         @drag="onDrag"
         @swipe="onSwipe"
+        @edit="emit('edit', currentJob)"
       />
     </div>
     <p v-else class="job-card-stack__empty">No more jobs</p>
@@ -60,8 +66,9 @@ function onSwipe(direction: 'left' | 'right') {
   left: 50%;
   z-index: 0;
   width: var(--job-card-width);
-  transform-origin: top center;
+  transform-origin: center center;
   pointer-events: none;
+  transition: transform 0.32s ease, opacity 0.32s ease;
 }
 
 .job-card-stack__current {

@@ -13,6 +13,7 @@ defineProps({
 const emit = defineEmits<{
   drag: [payload: { progress: number; direction: 'left' | 'right' | 'none' }]
   swipe: [direction: 'left' | 'right']
+  edit: []
 }>()
 
 const maxDragDistance = 160
@@ -121,5 +122,9 @@ function onTransitionEnd() {
     @pointercancel="onPointerEnd"
     @transitionend="onTransitionEnd"
   />
-  <LikeContainer :like-opacity="likeOpacity" :dislike-opacity="dislikeOpacity" />
+  <LikeContainer
+    :like-opacity="likeOpacity"
+    :dislike-opacity="dislikeOpacity"
+    @edit="emit('edit')"
+  />
 </template>

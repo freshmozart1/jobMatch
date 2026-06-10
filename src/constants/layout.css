@@ -10,6 +10,7 @@
     var(--like-container-button-size) + var(--like-container-vertical-padding) +
       var(--like-container-vertical-padding)
   );
+  --brandbar-height: 26px;
   --job-card-width: min(
     354px,
     calc(100vw - var(--match-horizontal-padding) - var(--match-horizontal-padding))
@@ -18,7 +19,8 @@
     695px,
     calc(
       100svh - var(--match-top-padding) - var(--match-bottom-padding) -
-        var(--match-bottom-safe-area) - var(--match-card-control-gap) - var(--like-container-height)
+        var(--match-bottom-safe-area) - var(--match-card-control-gap) - var(--like-container-height) -
+        var(--brandbar-height) - var(--match-card-control-gap)
     )
   );
 }

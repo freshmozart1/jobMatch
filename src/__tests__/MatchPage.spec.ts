@@ -253,12 +253,16 @@ describe('MatchPage', () => {
 
   it('scales the next card up while dragging', async () => {
     const wrapper = await mountLoadedMatchPage()
-    expect(wrapper.find('.job-card-stack__next').attributes('style')).toContain('scale(0)')
+    expect(wrapper.find('.job-card-stack__next').attributes('style')).toContain('scale(0.92)')
 
     dragCurrentCard(wrapper, 80)
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('.job-card-stack__next').attributes('style')).toContain('scale(0.5)')
+    const style = wrapper.find('.job-card-stack__next').attributes('style') ?? ''
+    const scaleMatch = style.match(/scale\(([\d.]+)\)/)
+    const scale = scaleMatch ? parseFloat(scaleMatch[1]!) : 0
+    expect(scale).toBeGreaterThan(0.92)
+    expect(scale).toBeLessThanOrEqual(1)
   })
 
   it('snaps back and keeps the same top card when dragged below the threshold', async () => {
@@ -270,7 +274,7 @@ describe('MatchPage', () => {
     expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
       title: testJobs[0]!.title,
     })
-    expect(wrapper.find('.job-card-stack__next').attributes('style')).toContain('scale(0)')
+    expect(wrapper.find('.job-card-stack__next').attributes('style')).toContain('scale(0.92)')
   })
 
   it('advances to the next card after committing a swipe', async () => {
