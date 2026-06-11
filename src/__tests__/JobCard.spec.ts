@@ -16,6 +16,8 @@ type JobCardProps = {
     scrapedAt: string
     tags?: string[]
     duplicateKey: string
+    embedding: number[]
+    cosineSimilarity?: number
   }
 }
 
@@ -32,6 +34,7 @@ function createJob(overrides: Partial<JobCardProps['job']> = {}): JobCardProps['
     scrapedAt: '2026-06-02T14:42:54.764Z',
     tags: ['Berufseinstieg', 'Vollzeit', 'Ingenieurwesen und IT', 'Einzelhandel'],
     duplicateKey: 'linkedin:4422110097',
+    embedding: [0.1, 0.2, 0.3],
     ...overrides,
   }
 }
@@ -89,5 +92,25 @@ describe('JobCard', () => {
     const wrapper = mount(JobCard, { props: { job } })
 
     expect(wrapper.find('.job-card__description-frame').exists()).toBe(false)
+  })
+
+  it('renders the cosine similarity indicator as a percentage when present', () => {
+    const job = createJob({ cosineSimilarity: 0.87 })
+    const wrapper = mount(JobCard, { props: { job } })
+
+    const indicator = wrapper.find('[data-testid="cosineSimilarityIndicator"]')
+    expect(indicator.exists()).toBe(true)
+    expect(indicator.find('.cosine-indicator__value').text()).toBe('87%')
+    expect(indicator.attributes('role')).toBe('meter')
+    expect(indicator.attributes('aria-valuetext')).toBe(
+      'Match to your liked jobs: 87% cosine similarity — strong match.',
+    )
+  })
+
+  it('omits the cosine similarity indicator when cosineSimilarity is missing', () => {
+    const job = createJob({ cosineSimilarity: undefined })
+    const wrapper = mount(JobCard, { props: { job } })
+
+    expect(wrapper.find('[data-testid="cosineSimilarityIndicator"]').exists()).toBe(false)
   })
 })

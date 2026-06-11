@@ -15,7 +15,8 @@
         "Ingenieurwesen und IT",
         "Einzelhandel"
     ],
-    "duplicateKey": "linkedin:4422110097"
+    "duplicateKey": "linkedin:4422110097",
+    "cosineSimilarity": 0.87
   },
   {
     "sourceHostname": "de.linkedin.com",
@@ -33,7 +34,8 @@
         "Node.js",
         "Cloud"
     ],
-    "duplicateKey": "linkedin:4400112233"
+    "duplicateKey": "linkedin:4400112233",
+    "cosineSimilarity": 0.41
   },
   {
     "sourceHostname": "de.linkedin.com",
@@ -51,6 +53,7 @@
         "Figma",
         "Kreativ"
     ],
-    "duplicateKey": "linkedin:4488776655"
+    "duplicateKey": "linkedin:4488776655",
+    "cosineSimilarity": 0.63
   }
 ]

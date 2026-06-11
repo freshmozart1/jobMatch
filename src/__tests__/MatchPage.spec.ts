@@ -16,6 +16,7 @@ const testJobs: ScrapedJob[] = [
     descriptionText: 'Build product features.',
     scrapedAt: '2026-06-08T10:00:00.000Z',
     duplicateKey: 'linkedin:1001',
+    embedding: [0.9, 0.1],
   },
   {
     sourceHostname: 'de.linkedin.com',
@@ -27,8 +28,15 @@ const testJobs: ScrapedJob[] = [
     descriptionText: 'Build UI features.',
     scrapedAt: '2026-06-08T11:00:00.000Z',
     duplicateKey: 'linkedin:1002',
+    embedding: [0.1, 0.9],
   },
 ]
+
+// Cosine similarity the mock server returns for each job's embedding.
+const similarityByEmbedding = new Map<string, number>([
+  [JSON.stringify(testJobs[0]!.embedding), 0.9],
+  [JSON.stringify(testJobs[1]!.embedding), 0.3],
+])
 
 const jobLinksByKeyword = {
   'Full Stack Engineer': testJobs.map((job) => job.sourceUrl),
@@ -81,6 +89,11 @@ function mockFetchPipeline(options: { failedJobPageUrls?: string[] } = {}) {
       }
 
       return createJsonResponse(job)
+    }
+
+    if (url.endsWith('/jobs/liked-average-similarity')) {
+      const similarity = similarityByEmbedding.get(JSON.stringify(requestBody)) ?? null
+      return createJsonResponse({ similarity })
     }
 
     return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
@@ -184,6 +197,11 @@ describe('MatchPage', () => {
         }
 
         return response.promise
+      }
+
+      if (url.endsWith('/jobs/liked-average-similarity')) {
+        const similarity = similarityByEmbedding.get(JSON.stringify(requestBody)) ?? null
+        return createJsonResponse({ similarity })
       }
 
       return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
@@ -314,5 +332,49 @@ describe('MatchPage', () => {
       title: testJobs[0]!.title,
     })
     expect(wrapper.find('.match-page__status--warning').text()).toBe('1 job page request failed.')
+  })
+
+  it('shows the cosine similarity fetched for the top card as a percentage', async () => {
+    const wrapper = await mountLoadedMatchPage()
+
+    await vi.waitFor(() => {
+      const indicator = wrapper.find(
+        '.job-card-stack__current [data-testid="cosineSimilarityIndicator"]',
+      )
+      expect(indicator.exists()).toBe(true)
+      expect(indicator.find('.cosine-indicator__value').text()).toBe('90%')
+    })
+  })
+
+  it('filters out jobs below the threshold when the match filter is enabled', async () => {
+    const wrapper = await mountLoadedMatchPage()
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('.job-card-stack__next').exists()).toBe(true)
+    })
+
+    await wrapper.find('.match-filter__switch').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Threshold defaults to 50%: the 90% job stays, the 30% job drops away.
+    expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
+      title: testJobs[0]!.title,
+    })
+    expect(wrapper.find('.job-card-stack__next').exists()).toBe(false)
+  })
+
+  it('shows the filter empty label when no job meets the threshold', async () => {
+    const wrapper = await mountLoadedMatchPage()
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('.cosine-indicator__value').exists()).toBe(true)
+    })
+
+    await wrapper.find('.match-filter__switch').trigger('click')
+    await wrapper.find('.match-filter__num input').setValue('95')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.job-card-stack__current').exists()).toBe(false)
+    expect(wrapper.find('.job-card-stack__empty').text()).toBe('No jobs at or above 95% match')
   })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { JobCardStack } from '@/components'
+import { computed, onMounted, ref } from 'vue'
+import { JobCardStack, MatchFilterBar } from '@/components'
 import CoverLetterPage from './CoverLetterPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 import { postJson } from '@/lib/api'
@@ -11,6 +11,21 @@ const jobs = ref<ScrapedJob[]>([])
 const isLoading = ref(true)
 const errorMessage = ref<string | null>(null)
 const failedJobPageUrls = ref<string[]>([])
+
+// In-card match filter: switch between all jobs and only jobs whose cosine
+// similarity is >= threshold% (set via the adjacent number input).
+const filterOn = ref(false)
+const threshold = ref(50)
+
+const visibleJobs = computed(() =>
+  filterOn.value
+    ? jobs.value.filter((job) => Math.round((job.cosineSimilarity ?? 0) * 100) >= threshold.value)
+    : jobs.value,
+)
+
+const emptyLabel = computed(() =>
+  filterOn.value ? `No jobs at or above ${threshold.value}% match` : 'No more jobs',
+)
 
 const coverLetterOpen = ref(false)
 const activeJob = ref<ScrapedJob | null>(null)
@@ -33,6 +48,23 @@ async function createJob(job: ScrapedJob, like: boolean) {
     await postJson('/jobs/create', { job, like })
   } catch (error) {
     console.error('Failed to create job:', error instanceof Error ? error.message : error)
+  }
+}
+
+async function loadJobSimilarity(job: ScrapedJob): Promise<void> {
+  // Isolated from the scrape flow: a similarity failure must never drop the job
+  // or trip the fetch-error state — the indicator simply stays hidden.
+  try {
+    const { similarity } = await postJson<{ similarity: number | null }>(
+      '/jobs/liked-average-similarity',
+      job.embedding,
+    )
+    if (typeof similarity === 'number') job.cosineSimilarity = similarity
+  } catch (error) {
+    console.error(
+      'Failed to fetch job similarity:',
+      error instanceof Error ? error.message : error,
+    )
   }
 }
 
@@ -60,7 +92,11 @@ async function fetchJobs(): Promise<void> {
       urls.map(async (url) => {
         try {
           const job = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
-          jobs.value.push(job)
+          // Mutate through the reactive array element so the indicator updates
+          // when its similarity resolves (a direct raw-object write would not
+          // trigger Vue reactivity).
+          const reactiveJob = jobs.value[jobs.value.push(job) - 1]!
+          await loadJobSimilarity(reactiveJob)
         } catch {
           failedJobPageUrls.value.push(url)
         }
@@ -96,7 +132,17 @@ onMounted(() => {
       <p v-if="failedJobPageUrls.length > 0" class="match-page__status match-page__status--warning">
         {{ failedJobPageUrls.length }} job page request failed.
       </p>
-      <JobCardStack :jobs="jobs" @like="createJob" @edit="openCoverLetter" />
+      <MatchFilterBar
+        v-model:enabled="filterOn"
+        v-model:threshold="threshold"
+      />
+      <JobCardStack
+        :key="filterOn ? 'min-' + threshold : 'all'"
+        :jobs="visibleJobs"
+        :empty-label="emptyLabel"
+        @like="createJob"
+        @edit="openCoverLetter"
+      />
     </template>
     <p v-else class="match-page__status">Loading jobs...</p>
 

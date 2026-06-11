@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import JobCardCompany from './JobCardCompany.vue'
+import JobCardCosineSimilarity from './JobCardCosineSimilarity.vue'
 import JobCardDescription from './JobCardDescription.vue'
 import JobCardTags from './JobCardTags.vue'
 import JobCardTitle from './JobCardTitle.vue'
@@ -27,6 +28,10 @@ const rotation = computed(() => (props.dragOffsetX ?? 0) * 0.06)
     <div class="stamp stamp--nope" :style="{ opacity: direction === 'left' ? progress : 0 }">Nope</div>
     <JobCardTitle :title="job.title" />
     <JobCardCompany :company="job.company" />
+    <JobCardCosineSimilarity
+      v-if="typeof job.cosineSimilarity === 'number'"
+      :value="job.cosineSimilarity"
+    />
     <JobCardTags :tags="job.tags" />
     <JobCardDescription :descriptionText="job.descriptionText" />
   </article>

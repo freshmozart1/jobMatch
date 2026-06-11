@@ -3,7 +3,9 @@ import { computed, ref } from 'vue'
 import { JobCard, JobCardContainer } from '@/components'
 import type { ScrapedJob } from './types'
 
-const props = defineProps<{ jobs: ScrapedJob[] }>()
+const props = withDefaults(defineProps<{ jobs: ScrapedJob[]; emptyLabel?: string }>(), {
+  emptyLabel: 'No more jobs',
+})
 const emit = defineEmits<{
   (e: 'like', job: ScrapedJob, like: boolean): void
   (e: 'edit', job: ScrapedJob): void
@@ -47,7 +49,7 @@ function onSwipe(direction: 'left' | 'right') {
         @edit="emit('edit', currentJob)"
       />
     </div>
-    <p v-else class="job-card-stack__empty">No more jobs</p>
+    <p v-else class="job-card-stack__empty">{{ emptyLabel }}</p>
   </div>
 </template>
 
