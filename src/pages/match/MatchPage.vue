@@ -39,10 +39,6 @@ function closeCoverLetter() {
   coverLetterOpen.value = false
 }
 
-function getUniqueUrls(jobLinksByKeyword: LinkedInJobLinksByKeyword): string[] {
-  return [...new Set(Object.values(jobLinksByKeyword).flat())]
-}
-
 async function createJob(job: ScrapedJob, like: boolean) {
   try {
     await postJson('/jobs/create', { job, like })
@@ -61,10 +57,7 @@ async function loadJobSimilarity(job: ScrapedJob): Promise<void> {
     )
     if (typeof similarity === 'number') job.cosineSimilarity = similarity
   } catch (error) {
-    console.error(
-      'Failed to fetch job similarity:',
-      error instanceof Error ? error.message : error,
-    )
+    console.error('Failed to fetch job similarity:', error instanceof Error ? error.message : error)
   }
 }
 
@@ -87,9 +80,8 @@ async function fetchJobs(): Promise<void> {
       '/jobs/filter-job-links',
       jobLinksByKeyword,
     )
-    const urls = getUniqueUrls(filteredJobLinksByKeyword)
     await Promise.all(
-      urls.map(async (url) => {
+      [...new Set(Object.values(filteredJobLinksByKeyword).flat())].map(async (url) => {
         try {
           const job = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
           // Mutate through the reactive array element so the indicator updates
@@ -132,10 +124,7 @@ onMounted(() => {
       <p v-if="failedJobPageUrls.length > 0" class="match-page__status match-page__status--warning">
         {{ failedJobPageUrls.length }} job page request failed.
       </p>
-      <MatchFilterBar
-        v-model:enabled="filterOn"
-        v-model:threshold="threshold"
-      />
+      <MatchFilterBar v-model:enabled="filterOn" v-model:threshold="threshold" />
       <JobCardStack
         :key="filterOn ? 'min-' + threshold : 'all'"
         :jobs="visibleJobs"
@@ -160,7 +149,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  min-height: 100svh;
+  min-height: 100dvh;
   overflow: hidden;
   padding: var(--match-top-padding) var(--match-horizontal-padding)
     calc(var(--match-bottom-padding) + var(--match-bottom-safe-area));
@@ -209,7 +198,7 @@ onMounted(() => {
 }
 
 .match-page__status--error {
-  color: #b42318;
+  color: var(--error);
 }
 
 .match-page__status--loading {
@@ -218,7 +207,7 @@ onMounted(() => {
 
 .match-page__status--warning {
   margin-bottom: var(--match-card-control-gap);
-  color: #b54708;
+  color: var(--warning);
 }
 
 /* Cover letter fly-in overlay */
@@ -229,11 +218,12 @@ onMounted(() => {
   transform-origin: center center;
   transform: translateX(115%) rotate(7deg) scale(0.6);
   opacity: 0;
-  border-radius: 24px;
+  border-radius: var(--job-card-border-radius);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
   pointer-events: none;
   background: var(--background-color);
-  transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+  transition:
+    transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
     opacity 0.3s ease,
     border-radius 0.4s ease;
 }
@@ -250,12 +240,12 @@ onMounted(() => {
   0% {
     transform: translateX(115%) rotate(7deg) scale(0.6);
     opacity: 0.35;
-    border-radius: 24px;
+    border-radius: var(--job-card-border-radius);
   }
   46% {
     transform: translateX(0) rotate(0deg) scale(0.62);
     opacity: 1;
-    border-radius: 24px;
+    border-radius: var(--job-card-border-radius);
   }
   100% {
     transform: none;

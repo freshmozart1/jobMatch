@@ -13,5 +13,8 @@ defineProps<{ company: string }>()
   font-weight: 100;
   text-align: center;
   word-break: break-word;
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 6px 0 0 0;
 }
 </style>

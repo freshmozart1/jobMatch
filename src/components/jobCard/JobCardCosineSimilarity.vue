@@ -92,7 +92,6 @@ const altText = computed(
 .cosine-indicator__value {
   flex: 0 0 auto;
   min-width: 32px;
-  font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

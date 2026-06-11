@@ -19,10 +19,11 @@
     695px,
     calc(
       100svh - var(--match-top-padding) - var(--match-bottom-padding) -
-        var(--match-bottom-safe-area) - var(--match-card-control-gap) - var(--like-container-height) -
-        var(--brandbar-height) - var(--match-card-control-gap)
+        var(--match-bottom-safe-area) - var(--match-card-control-gap) -
+        var(--like-container-height) - var(--brandbar-height) - var(--match-card-control-gap)
     )
   );
+  --job-card-border-radius: 24px;
 }
 
 @media (min-width: 768px) {
@@ -33,4 +34,11 @@
     --match-card-control-gap: 0px;
     --like-container-vertical-padding: 24px;
   }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
 }
