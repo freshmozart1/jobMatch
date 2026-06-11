@@ -31,14 +31,6 @@
     --match-horizontal-padding: 24px;
     --match-top-padding: 24px;
     --match-bottom-padding: 0px;
-    --match-card-control-gap: 0px;
     --like-container-vertical-padding: 24px;
   }
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
 }
