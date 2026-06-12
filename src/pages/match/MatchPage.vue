@@ -110,20 +110,7 @@ async function fetchJobs(): Promise<void> {
     await Promise.all(
       [...new Set(Object.values(filteredJobLinksByKeyword).flat())].map(async (url) => {
         try {
-          const job = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
-          try {
-            const { similarity } = await postJson<{ similarity: number | null }>(
-              '/jobs/liked-average-similarity',
-              job.embedding,
-            )
-            if (typeof similarity === 'number') job.cosineSimilarity = similarity
-          } catch (error) {
-            console.error(
-              'Failed to fetch job similarity:',
-              error instanceof Error ? error.message : error,
-            )
-          }
-          jobs.value.push(job)
+          jobs.value.push(await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url }))
         } catch {
           failedJobPageUrls.value.push(url)
         }
