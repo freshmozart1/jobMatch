@@ -3,6 +3,7 @@ defineProps<{ enabled: boolean; threshold: number }>()
 const emit = defineEmits<{
   'update:enabled': [value: boolean]
   'update:threshold': [value: number]
+  search: []
 }>()
 
 function clamp(n: number): number {
@@ -41,6 +42,22 @@ function onThresholdInput(event: Event) {
       />
       <span class="match-filter__unit">%</span>
     </span>
+    <button
+      type="button"
+      class="match-filter__search"
+      aria-label="Search jobs"
+      @click="emit('search')"
+    >
+      <svg class="match-filter__search-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          d="M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5L20 20"
+        />
+      </svg>
+    </button>
   </div>
 </template>
 
@@ -144,5 +161,38 @@ function onThresholdInput(event: Event) {
   font-size: 13px;
   font-weight: 600;
   color: var(--border-color);
+}
+
+.match-filter__search {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-color);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.match-filter__search:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.24);
+}
+
+.match-filter__search:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.match-filter__search-icon {
+  width: 17px;
+  height: 17px;
 }
 </style>
