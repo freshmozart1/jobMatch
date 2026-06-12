@@ -42,14 +42,20 @@ function updateKeywords(next: string[]) {
 }
 
 function getCity(): string {
-  try { return window.localStorage.getItem('jobmatch.searchcity') ?? '' } catch { return '' }
+  try {
+    return window.localStorage.getItem('jobmatch.searchcity') ?? ''
+  } catch {
+    return ''
+  }
 }
 
 function getDistance(): number {
   try {
     const raw = window.localStorage.getItem('jobmatch.searchdistance')
-    return raw ? (Number(raw) || 25) : 25
-  } catch { return 25 }
+    return raw ? Number(raw) || 25 : 25
+  } catch {
+    return 25
+  }
 }
 
 const visibleJobs = computed(() =>
@@ -82,20 +88,6 @@ async function createJob(job: ScrapedJob, like: boolean) {
   }
 }
 
-async function loadJobSimilarity(job: ScrapedJob): Promise<void> {
-  // Isolated from the scrape flow: a similarity failure must never drop the job
-  // or trip the fetch-error state — the indicator simply stays hidden.
-  try {
-    const { similarity } = await postJson<{ similarity: number | null }>(
-      '/jobs/liked-average-similarity',
-      job.embedding,
-    )
-    if (typeof similarity === 'number') job.cosineSimilarity = similarity
-  } catch (error) {
-    console.error('Failed to fetch job similarity:', error instanceof Error ? error.message : error)
-  }
-}
-
 async function fetchJobs(): Promise<void> {
   isLoading.value = true
   jobs.value = []
@@ -119,11 +111,19 @@ async function fetchJobs(): Promise<void> {
       [...new Set(Object.values(filteredJobLinksByKeyword).flat())].map(async (url) => {
         try {
           const job = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
-          // Mutate through the reactive array element so the indicator updates
-          // when its similarity resolves (a direct raw-object write would not
-          // trigger Vue reactivity).
-          const reactiveJob = jobs.value[jobs.value.push(job) - 1]!
-          await loadJobSimilarity(reactiveJob)
+          try {
+            const { similarity } = await postJson<{ similarity: number | null }>(
+              '/jobs/liked-average-similarity',
+              job.embedding,
+            )
+            if (typeof similarity === 'number') job.cosineSimilarity = similarity
+          } catch (error) {
+            console.error(
+              'Failed to fetch job similarity:',
+              error instanceof Error ? error.message : error,
+            )
+          }
+          jobs.value.push(job)
         } catch {
           failedJobPageUrls.value.push(url)
         }
@@ -207,7 +207,11 @@ watch(searchOpen, (open) => {
     </div>
 
     <div :class="['cl-overlay', { 'cl-overlay--open': searchOpen }]">
-      <SearchPage :keywords="keywords" @update:keywords="updateKeywords" @back="searchOpen = false" />
+      <SearchPage
+        :keywords="keywords"
+        @update:keywords="updateKeywords"
+        @back="searchOpen = false"
+      />
     </div>
   </main>
 </template>
