@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
-import { postJson } from '@/lib/api'
+import { getJson, postJson } from '@/lib/api'
 import { CoverLetterEditor } from '@/components/coverLetter'
 import { ApplicationEditorHeader, ApplicationEditorMenu } from '@/components/application'
 
@@ -12,8 +12,6 @@ const storageKey = computed(() => 'jobmatch.coverletter.' + props.job.duplicateK
 const text = ref('')
 const view = ref<'menu' | 'letter'>('menu')
 
-// TODO: backend — load CV uploaded status from server on mount/job change
-// (e.g. GET /jobs/{duplicateKey}/cv-status) since it persists across sessions
 const cvUploaded = ref(false)
 const selectedCvFile = ref<File | null>(null)
 
@@ -43,7 +41,7 @@ const prevJob = ref<ScrapedJob>(props.job)
 
 watch(
   () => props.job.duplicateKey,
-  (_newKey, oldKey) => {
+  async (newKey, oldKey) => {
     const jobToFlush = prevJob.value
     if (oldKey && uploadTimer !== null) {
       void uploadNow(oldKey, text.value, jobToFlush)
@@ -57,6 +55,13 @@ watch(
       text.value = window.localStorage.getItem(storageKey.value) ?? ''
     } catch {
       text.value = ''
+    }
+    try {
+      await getJson(`/cv/${newKey}/status`)
+      if (newKey === props.job.duplicateKey) cvUploaded.value = true
+    } catch {
+      // 404 → no CV on server; also covers network errors
+      if (newKey === props.job.duplicateKey) cvUploaded.value = false
     }
   },
   { immediate: true },
@@ -87,9 +92,9 @@ function shouldSkipUpload(snapshot: string, isCurrentJob: () => boolean): boolea
   return snapshot === lastUploadedText.value || uploadInFlight
 }
 
-function needsReschedule(jobKey: string, snapshot: string): boolean {
+function needsReschedule(newKey: string, snapshot: string): boolean {
   return (
-    jobKey === props.job.duplicateKey &&
+    newKey === props.job.duplicateKey &&
     text.value !== snapshot &&
     text.value !== lastUploadedText.value
   )
@@ -117,12 +122,12 @@ async function createJobIfNeeded(job: ScrapedJob): Promise<boolean> {
 }
 
 async function uploadNow(
-  jobKey: string = props.job.duplicateKey,
+  newKey: string = props.job.duplicateKey,
   snapshot: string = text.value,
   jobForCreation: ScrapedJob = props.job,
 ) {
   clearUploadTimer()
-  const isCurrentJob = () => jobKey === props.job.duplicateKey
+  const isCurrentJob = () => newKey === props.job.duplicateKey
   if (shouldSkipUpload(snapshot, isCurrentJob)) return
   uploadInFlight = true
   try {
@@ -131,7 +136,7 @@ async function uploadNow(
     if (isCurrentJob()) saveStatus.value = 'saving'
     await postJson('/cover-letters/upload/text', {
       coverLetterText: snapshot,
-      jobDuplicateKey: jobKey,
+      jobDuplicateKey: newKey,
     })
     if (isCurrentJob()) {
       lastUploadedText.value = snapshot
@@ -142,7 +147,7 @@ async function uploadNow(
     console.error('Failed to upload cover letter:', error instanceof Error ? error.message : error)
   } finally {
     uploadInFlight = false
-    if (needsReschedule(jobKey, snapshot)) scheduleUpload()
+    if (needsReschedule(newKey, snapshot)) scheduleUpload()
   }
 }
 
