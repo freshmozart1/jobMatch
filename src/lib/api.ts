@@ -10,6 +10,18 @@ export async function getJson<ResponseBody>(path: string): Promise<ResponseBody>
   return (text ? JSON.parse(text) : undefined) as ResponseBody
 }
 
+export async function postFormData<ResponseBody>(path: string, formData: FormData): Promise<ResponseBody> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!response.ok) {
+    throw new Error(await getResponseErrorMessage(response))
+  }
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as ResponseBody
+}
+
 export async function postJson<ResponseBody>(path: string, body: unknown): Promise<ResponseBody> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',

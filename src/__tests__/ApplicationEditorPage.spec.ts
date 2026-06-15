@@ -226,6 +226,83 @@ describe('ApplicationEditorPage', () => {
     expect(wrapper.find('.cl-paper__jobdesc').text()).toContain('3 years experience.')
   })
 
+  // --- CV upload ---
+
+  async function selectCvFile(wrapper: ReturnType<typeof mount>, file: File) {
+    const input = wrapper.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+    await input.trigger('change')
+    await flushPromises()
+  }
+
+  it('sends FormData with file and jobDuplicateKey to POST /cv/upload on file selection', async () => {
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    fetchMock.mockClear()
+    const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
+    await selectCvFile(wrapper, file)
+    const cvUploadCall = fetchMock.mock.calls.find((c: unknown[]) =>
+      (c[0] as string).includes('/cv/upload'),
+    )
+    expect(cvUploadCall).toBeDefined()
+    const body = (cvUploadCall![1] as RequestInit).body as FormData
+    expect(body).toBeInstanceOf(FormData)
+    expect(body.get('file')).toBe(file)
+    expect(body.get('jobDuplicateKey')).toBe(job.duplicateKey)
+  })
+
+  it('enables the download button after a successful CV upload', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 404 })) // CV status check — no CV yet
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(true)
+    const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
+    await selectCvFile(wrapper, file)
+    expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('keeps the download button disabled when the CV upload returns an error', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 404 })) // CV status check — no CV
+      .mockResolvedValueOnce(new Response('{}', { status: 201 })) // /jobs/create succeeds
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
+      ) // /cv/upload fails
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
+    await selectCvFile(wrapper, file)
+    expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('calls /jobs/create before /cv/upload when a file is selected', async () => {
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    fetchMock.mockClear()
+    const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
+    await selectCvFile(wrapper, file)
+    const urls = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const jobsCreateIndex = urls.findIndex((u) => u.includes('/jobs/create'))
+    const cvUploadIndex = urls.findIndex((u) => u.includes('/cv/upload'))
+    expect(jobsCreateIndex).toBeGreaterThanOrEqual(0)
+    expect(cvUploadIndex).toBeGreaterThan(jobsCreateIndex)
+  })
+
+  it('does not call /cv/upload when job creation fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 404 })) // CV status check — no CV
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
+      ) // /jobs/create fails
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    fetchMock.mockClear()
+    const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
+    await selectCvFile(wrapper, file)
+    const urls = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    expect(urls.some((u) => u.includes('/cv/upload'))).toBe(false)
+  })
+
   // --- lifecycle ---
 
   it('flushes a pending upload when the component is unmounted', async () => {
