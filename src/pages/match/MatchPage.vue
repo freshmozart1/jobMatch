@@ -88,6 +88,21 @@ async function createJob(job: ScrapedJob, like: boolean) {
   }
 }
 
+async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
+  if (!job.embedding?.length) return
+  try {
+    const result = await postJson<{ similarity: number | null }>(
+      '/jobs/liked-average-similarity',
+      job.embedding,
+    )
+    if (typeof result.similarity === 'number') {
+      job.cosineSimilarity = result.similarity
+    }
+  } catch {
+    // similarity is optional; silently ignore errors
+  }
+}
+
 async function fetchJobs(): Promise<void> {
   isLoading.value = true
   jobs.value = []
@@ -111,6 +126,7 @@ async function fetchJobs(): Promise<void> {
       [...new Set(Object.values(filteredJobLinksByKeyword).flat())].map(async (url) => {
         try {
           jobs.value.push(await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url }))
+          void fetchCosineSimilarity(jobs.value.at(-1)!)
         } catch {
           failedJobPageUrls.value.push(url)
         }

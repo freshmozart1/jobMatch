@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 
 import { JobCardStack, JobCardContainer } from '@/components'
 import type { ScrapedJob } from '@/components/jobCard/types'
+import { swipeTopCard } from './testUtils'
 
 function createJob(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
   return {
@@ -15,14 +16,6 @@ function createJob(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
     embedding: [0.1, 0.2, 0.3],
     ...overrides,
   }
-}
-
-function swipeTopCard(wrapper: ReturnType<typeof mount>) {
-  const card = wrapper.find('.job-card-stack__current .job-card').element
-  card.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0 }))
-  card.dispatchEvent(new MouseEvent('pointermove', { clientX: 200 }))
-  card.dispatchEvent(new MouseEvent('pointerup', { clientX: 200 }))
-  card.dispatchEvent(new Event('transitionend'))
 }
 
 describe('JobCardStack', () => {

@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import { JobCardContainer, LikeContainer } from '@/components'
 import MatchPage from '@/pages/match/MatchPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
+import { swipeTopCard } from './testUtils'
 
 const testJobs: ScrapedJob[] = [
   {
@@ -121,13 +122,22 @@ function dragCurrentCard(wrapper: ReturnType<typeof mount>, clientX: number) {
   return card
 }
 
+function expectTopCardStillFirst(wrapper: ReturnType<typeof mount>) {
+  expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
+    title: testJobs[0]!.title,
+  })
+}
+
 describe('MatchPage', () => {
   beforeEach(() => {
+    window.localStorage.setItem('jobmatch.searchkeywords', JSON.stringify(['Full Stack Engineer']))
+    window.localStorage.setItem('jobmatch.searchcity', 'Hamburg')
     mockFetchPipeline()
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    window.localStorage.clear()
   })
 
   it('fetches LinkedIn job links, filters them, and scrapes job pages', async () => {
@@ -267,9 +277,7 @@ describe('MatchPage', () => {
     card.dispatchEvent(new MouseEvent('pointerup', { clientX: 80 }))
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
-      title: testJobs[0]!.title,
-    })
+    expectTopCardStillFirst(wrapper)
     expect(wrapper.find('.job-card-stack__next').attributes('style')).toContain('scale(0.92)')
   })
 
@@ -289,11 +297,7 @@ describe('MatchPage', () => {
     const wrapper = await mountLoadedMatchPage()
 
     for (let i = 0; i < testJobs.length; i++) {
-      const card = wrapper.find('.job-card-stack__current .job-card').element
-      card.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0 }))
-      card.dispatchEvent(new MouseEvent('pointermove', { clientX: 200 }))
-      card.dispatchEvent(new MouseEvent('pointerup', { clientX: 200 }))
-      card.dispatchEvent(new Event('transitionend'))
+      swipeTopCard(wrapper)
       await wrapper.vm.$nextTick()
     }
 
@@ -335,9 +339,7 @@ describe('MatchPage', () => {
     await wrapper.vm.$nextTick()
 
     // Threshold defaults to 50%: the 90% job stays, the 30% job drops away.
-    expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
-      title: testJobs[0]!.title,
-    })
+    expectTopCardStillFirst(wrapper)
     expect(wrapper.find('.job-card-stack__next').exists()).toBe(false)
   })
 
