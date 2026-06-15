@@ -3,6 +3,18 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ApplicationEditorPage from '@/pages/match/ApplicationEditorPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 
+const job2: ScrapedJob = {
+  sourceHostname: 'de.linkedin.com',
+  sourceJobId: '2002',
+  sourceUrl: 'https://de.linkedin.com/jobs/view/2002/',
+  title: 'Backend Engineer',
+  company: 'Other GmbH',
+  location: 'Berlin',
+  scrapedAt: '2026-06-08T10:00:00.000Z',
+  duplicateKey: 'linkedin:2002',
+  embedding: [0.5, 0.5],
+}
+
 const job: ScrapedJob = {
   sourceHostname: 'de.linkedin.com',
   sourceJobId: '1001',
@@ -101,6 +113,29 @@ describe('ApplicationEditorPage', () => {
     expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('enables the download button after the server confirms a CV exists', async () => {
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('leaves the download button disabled when the server returns 404 for CV status', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 404 })))
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('re-fetches CV status for the new job when the active job changes', async () => {
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    fetchMock.mockClear()
+    await wrapper.setProps({ job: job2 })
+    await flushPromises()
+    const urls = getCalledUrls()
+    expect(urls.some((u) => u.includes('/cv/linkedin:2002/status'))).toBe(true)
+  })
+
   // --- cover letter editor ---
 
   it('loads saved cover letter text from localStorage into the textarea', async () => {
@@ -161,6 +196,7 @@ describe('ApplicationEditorPage', () => {
 
   it('shows "Save failed" when the cover letter upload returns an error but job creation succeeded', async () => {
     fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 200 })) // CV status check
       .mockResolvedValueOnce(new Response('{}', { status: 201 })) // /jobs/create succeeds
       .mockResolvedValue(
         new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
@@ -182,10 +218,10 @@ describe('ApplicationEditorPage', () => {
     )
   })
 
-  it('skips the upload and stays idle when the textarea is empty', async () => {
+  it('skips the upload pipeline and stays idle when the textarea is empty', async () => {
     const wrapper = await mountAndOpen()
     await typeAndFlush(wrapper, '')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expectEndpointsCalled(false, false)
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Draft auto-saves as you type')
   })
 
@@ -221,6 +257,7 @@ describe('ApplicationEditorPage', () => {
 
   it('retries job creation on the next edit after a failure', async () => {
     fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 404 })) // CV status check (no CV)
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
       ) // first /jobs/create fails

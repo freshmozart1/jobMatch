@@ -1,6 +1,14 @@
 const API_BASE_URL =
   import.meta.env.VITE_JOB_MATCH_SERVER_URL ?? `http://${window.location.hostname}:3000`
 
+export async function getJson<ResponseBody>(path: string): Promise<ResponseBody> {
+  const response = await fetch(`${API_BASE_URL}${path}`)
+  if (!response.ok) {
+    throw new Error(await getResponseErrorMessage(response))
+  }
+  return response.json() as Promise<ResponseBody>
+}
+
 export async function postJson<ResponseBody>(path: string, body: unknown): Promise<ResponseBody> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
