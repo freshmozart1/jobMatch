@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { JobCardStack, MatchFilterBar } from '@/components'
-import CoverLetterPage from './ApplicationEditorPage.vue'
+import { BrandBar, JobCardStack, MatchFilterBar } from '@/components'
+import ApplicationEditorPage from './ApplicationEditorPage.vue'
 import SearchPage from './SearchPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 import { postJson } from '@/lib/api'
@@ -151,10 +151,7 @@ watch(searchOpen, (open) => {
 
 <template>
   <main class="match-page">
-    <div class="brandbar">
-      <div class="brandbar__mark" />
-      <div class="brandbar__name">job<span>Match</span></div>
-    </div>
+    <BrandBar />
 
     <template v-if="!matchEnabled">
       <div class="match-empty">
@@ -207,11 +204,11 @@ watch(searchOpen, (open) => {
       </div>
     </template>
 
-    <div :class="['cl-overlay', { 'cl-overlay--open': coverLetterOpen }]">
-      <CoverLetterPage v-if="activeJob" :job="activeJob" @back="closeCoverLetter" />
+    <div :class="['overlay', { 'overlay--open': coverLetterOpen }]">
+      <ApplicationEditorPage v-if="activeJob" :job="activeJob" @back="closeCoverLetter" />
     </div>
 
-    <div :class="['cl-overlay', { 'cl-overlay--open': searchOpen }]">
+    <div :class="['overlay', { 'overlay--open': searchOpen }]">
       <SearchPage
         :keywords="keywords"
         @update:keywords="updateKeywords"
@@ -221,225 +218,4 @@ watch(searchOpen, (open) => {
   </main>
 </template>
 
-<style scoped>
-.match-page {
-  position: relative;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 100dvh;
-  overflow: hidden;
-  padding: var(--match-top-padding) var(--match-horizontal-padding)
-    calc(var(--match-bottom-padding) + var(--match-bottom-safe-area));
-  background: var(--page-background-color, var(--background-color));
-}
-
-.brandbar {
-  width: var(--job-card-width);
-  height: var(--brandbar-height);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: var(--match-card-control-gap);
-  flex: 0 0 auto;
-}
-
-.brandbar__mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, var(--accents-pink), var(--accents-green));
-  flex: 0 0 auto;
-}
-
-.brandbar__name {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  color: var(--text-color);
-}
-
-.brandbar__name span {
-  font-weight: 300;
-  color: var(--border-color);
-}
-
-.match-page__status {
-  max-width: var(--job-card-width);
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--border-color);
-  text-align: center;
-}
-
-.match-page__status--error {
-  color: var(--error);
-}
-
-.match-page__status--loading {
-  margin-bottom: var(--match-card-control-gap);
-}
-
-.match-page__status--warning {
-  margin-bottom: var(--match-card-control-gap);
-  color: var(--warning);
-}
-
-/* Empty state — no keywords saved yet */
-.match-empty {
-  flex: 1 1 0;
-  min-height: 0;
-  width: var(--job-card-width);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 14px;
-  padding-bottom: 8vh;
-}
-
-.match-empty__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 1px solid var(--border-color);
-  color: var(--border-color);
-  margin-bottom: 4px;
-}
-
-.match-empty__icon svg {
-  width: 28px;
-  height: 28px;
-}
-
-.match-empty__title {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--border-color);
-}
-
-.match-empty__text {
-  margin: 0;
-  max-width: 240px;
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-  color: var(--border-color);
-  text-wrap: pretty;
-}
-
-.match-empty__cta {
-  margin-top: 6px;
-  padding: 11px 22px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--border-color);
-  color: var(--background-color);
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.match-empty__cta:hover {
-  opacity: 0.85;
-}
-
-.match-empty__cta:active {
-  opacity: 0.7;
-}
-
-/* Full-area state for initial load (no cards yet) */
-.match-status-fill {
-  flex: 1 1 0;
-  min-height: 0;
-  width: var(--job-card-width);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .match-page__status--loading,
-  .match-status-fill .match-page__status {
-    animation: match-status-pulse 1.4s ease-in-out infinite;
-  }
-}
-
-@keyframes match-status-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-/* Cover letter fly-in overlay */
-.cl-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  transform-origin: center center;
-  transform: translateX(115%) rotate(7deg) scale(0.6);
-  opacity: 0;
-  border-radius: var(--job-card-border-radius);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  background: var(--background-color);
-  transition:
-    transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity 0.3s ease,
-    border-radius 0.4s ease;
-}
-
-.cl-overlay--open {
-  transform: none;
-  opacity: 1;
-  border-radius: 0;
-  pointer-events: auto;
-  animation: cl-fly-in 0.66s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-@keyframes cl-fly-in {
-  0% {
-    transform: translateX(115%) rotate(7deg) scale(0.6);
-    opacity: 0.35;
-    border-radius: var(--job-card-border-radius);
-  }
-  46% {
-    transform: translateX(0) rotate(0deg) scale(0.62);
-    opacity: 1;
-    border-radius: var(--job-card-border-radius);
-  }
-  100% {
-    transform: none;
-    border-radius: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cl-overlay {
-    transition: opacity 0.2s ease;
-    transform: none;
-  }
-  .cl-overlay--open {
-    animation: none;
-  }
-}
-</style>
+<style scoped src="./MatchPage.css"></style>
