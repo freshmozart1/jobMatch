@@ -34,6 +34,30 @@ describe('ApplicationEditorPage', () => {
     window.localStorage.clear()
   })
 
+  async function mountAndOpen(draftText?: string) {
+    if (draftText !== undefined)
+      window.localStorage.setItem('jobmatch.coverletter.linkedin:1001', draftText)
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await wrapper.find('.cl-action').trigger('click')
+    return wrapper
+  }
+
+  async function typeAndFlush(wrapper: ReturnType<typeof mount>, text: string) {
+    await wrapper.find('.cl-textarea').setValue(text)
+    await vi.runAllTimersAsync()
+    await flushPromises()
+  }
+
+  function getCalledUrls(): string[] {
+    return fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+  }
+
+  function expectEndpointsCalled(expectedJobs: boolean, expectedCoverLetter: boolean) {
+    const urls = getCalledUrls()
+    expect(urls.some((u) => u.includes('/jobs/create'))).toBe(expectedJobs)
+    expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(expectedCoverLetter)
+  }
+
   // --- menu view ---
 
   it('mounts in the menu view with "Application Editor" header', () => {
@@ -43,15 +67,13 @@ describe('ApplicationEditorPage', () => {
   })
 
   it('navigates to the letter view when "Cover Letter" is clicked', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     expect(wrapper.find('.cl-header__title').text()).toBe('Cover Letter')
     expect(wrapper.find('.cl-textarea').exists()).toBe(true)
   })
 
   it('back from the letter view returns to the menu without emitting back', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     await wrapper.find('.cl-header__back').trigger('click')
     expect(wrapper.find('.cl-menu').exists()).toBe(true)
     expect(wrapper.emitted('back')).toBeFalsy()
@@ -82,56 +104,47 @@ describe('ApplicationEditorPage', () => {
   // --- cover letter editor ---
 
   it('loads saved cover letter text from localStorage into the textarea', async () => {
-    window.localStorage.setItem('jobmatch.coverletter.linkedin:1001', 'Saved draft')
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen('Saved draft')
     expect((wrapper.find('.cl-textarea').element as HTMLTextAreaElement).value).toBe('Saved draft')
   })
 
   it('shows "Saved as draft" status when localStorage text is present on load', async () => {
-    window.localStorage.setItem('jobmatch.coverletter.linkedin:1001', 'Saved draft')
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen('Saved draft')
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Saved as draft')
   })
 
   it('updates the word count as text is typed', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     await wrapper.find('.cl-textarea').setValue('Hello world')
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.cl-meta').text()).toContain('2 words')
   })
 
   it('uses the singular "word" for a single word', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     await wrapper.find('.cl-textarea').setValue('Hello')
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.cl-meta').text()).toContain('1 word')
   })
 
   it('shows the default status label when no text has been typed', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Draft auto-saves as you type')
   })
 
   it('sets status to "Saving soon…" immediately after typing', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     await wrapper.find('.cl-textarea').setValue('Hello')
     await wrapper.vm.$nextTick()
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Saving soon…')
   })
 
   it('uploads text and shows "Saved to server" after the 3s debounce fires', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     await wrapper.find('.cl-textarea').setValue('Hello world')
     await vi.runAllTimersAsync()
     await flushPromises()
-    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const urls = getCalledUrls()
     const jobsCreateIndex = urls.findIndex((u) => u.includes('/jobs/create'))
     const coverLetterIndex = urls.findIndex((u) => u.includes('/cover-letters/upload/text'))
     expect(jobsCreateIndex).toBeGreaterThanOrEqual(0)
@@ -152,11 +165,8 @@ describe('ApplicationEditorPage', () => {
       .mockResolvedValue(
         new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
       ) // /cover-letters/upload/text fails
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
-    await wrapper.find('.cl-textarea').setValue('Hello')
-    await vi.runAllTimersAsync()
-    await flushPromises()
+    const wrapper = await mountAndOpen()
+    await typeAndFlush(wrapper, 'Hello')
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Save failed — retrying on next edit')
   })
 
@@ -164,32 +174,23 @@ describe('ApplicationEditorPage', () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
     )
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
-    await wrapper.find('.cl-textarea').setValue('Hello')
-    await vi.runAllTimersAsync()
-    await flushPromises()
-    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
-    expect(urls.some((u) => u.includes('/jobs/create'))).toBe(true)
-    expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(false)
+    const wrapper = await mountAndOpen()
+    await typeAndFlush(wrapper, 'Hello')
+    expectEndpointsCalled(true, false)
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe(
       'Job could not be saved — cover letter not stored. Will retry on next edit.',
     )
   })
 
   it('skips the upload and stays idle when the textarea is empty', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
-    await wrapper.find('.cl-textarea').setValue('')
-    await vi.runAllTimersAsync()
-    await flushPromises()
+    const wrapper = await mountAndOpen()
+    await typeAndFlush(wrapper, '')
     expect(fetchMock).not.toHaveBeenCalled()
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Draft auto-saves as you type')
   })
 
   it('renders bold segments from **bold** markdown in the job description', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     expect(wrapper.find('.cl-paper__jobdesc strong').text()).toBe('Requirements')
     expect(wrapper.find('.cl-paper__jobdesc').text()).toContain('3 years experience.')
   })
@@ -197,8 +198,7 @@ describe('ApplicationEditorPage', () => {
   // --- lifecycle ---
 
   it('flushes a pending upload when the component is unmounted', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
     await wrapper.find('.cl-textarea').setValue('Draft text')
     await wrapper.vm.$nextTick()
     // timer is pending but not yet fired
@@ -207,21 +207,14 @@ describe('ApplicationEditorPage', () => {
     // onBeforeUnmount fires uploadNow(); flush the async chain
     await flushPromises()
 
-    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
-    expect(urls.some((u) => u.includes('/jobs/create'))).toBe(true)
-    expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(true)
+    expectEndpointsCalled(true, true)
   })
 
   it('only calls /jobs/create once across multiple edits for the same job', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
-    await wrapper.find('.cl-textarea').setValue('First edit')
-    await vi.runAllTimersAsync()
-    await flushPromises()
-    await wrapper.find('.cl-textarea').setValue('Second edit')
-    await vi.runAllTimersAsync()
-    await flushPromises()
-    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const wrapper = await mountAndOpen()
+    await typeAndFlush(wrapper, 'First edit')
+    await typeAndFlush(wrapper, 'Second edit')
+    const urls = getCalledUrls()
     const jobsCreateCalls = urls.filter((u) => u.includes('/jobs/create'))
     expect(jobsCreateCalls).toHaveLength(1)
   })
@@ -233,23 +226,18 @@ describe('ApplicationEditorPage', () => {
       ) // first /jobs/create fails
       .mockResolvedValueOnce(new Response('{}', { status: 201 })) // retry /jobs/create succeeds
       .mockResolvedValueOnce(new Response('{}', { status: 201 })) // /cover-letters/upload/text succeeds
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    const wrapper = await mountAndOpen()
 
     // First edit — job creation fails
-    await wrapper.find('.cl-textarea').setValue('First edit')
-    await vi.runAllTimersAsync()
-    await flushPromises()
+    await typeAndFlush(wrapper, 'First edit')
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe(
       'Job could not be saved — cover letter not stored. Will retry on next edit.',
     )
 
     // Second edit — job creation retries and succeeds
-    await wrapper.find('.cl-textarea').setValue('Second edit')
-    await vi.runAllTimersAsync()
-    await flushPromises()
+    await typeAndFlush(wrapper, 'Second edit')
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Saved to server')
-    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const urls = getCalledUrls()
     expect(urls.filter((u) => u.includes('/jobs/create'))).toHaveLength(2)
     expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(true)
   })
