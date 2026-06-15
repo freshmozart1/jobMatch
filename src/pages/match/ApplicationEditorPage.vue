@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 import { postJson } from '@/lib/api'
 import CvFileInput from '@/components/CvFileInput.vue'
-import CoverLetterAction from '@/components/CoverLetterAction.vue'
-import CoverLetterEditor from '@/components/CoverLetterEditor.vue'
+import CoverLetterAction from '@/components/coverLetter/CoverLetterAction.vue'
+import CoverLetterEditor from '@/components/coverLetter/CoverLetterEditor.vue'
 
 const props = defineProps<{ job: ScrapedJob }>()
 const emit = defineEmits<{ back: [] }>()
@@ -109,7 +109,10 @@ async function createJobIfNeeded(job: ScrapedJob): Promise<boolean> {
       jobCreateFailed.value = true
       saveStatus.value = 'error'
     }
-    console.error('Failed to create job in database:', error instanceof Error ? error.message : error)
+    console.error(
+      'Failed to create job in database:',
+      error instanceof Error ? error.message : error,
+    )
     return false
   }
 }
@@ -137,10 +140,7 @@ async function uploadNow(
     }
   } catch (error) {
     if (isCurrentJob()) saveStatus.value = 'error'
-    console.error(
-      'Failed to upload cover letter:',
-      error instanceof Error ? error.message : error,
-    )
+    console.error('Failed to upload cover letter:', error instanceof Error ? error.message : error)
   } finally {
     uploadInFlight = false
     if (needsReschedule(jobKey, snapshot)) scheduleUpload()
@@ -197,7 +197,6 @@ const statusLabel = computed(() => {
       return words.value > 0 ? 'Saved as draft' : 'Draft auto-saves as you type'
   }
 })
-
 </script>
 
 <template>
@@ -215,7 +214,9 @@ const statusLabel = computed(() => {
         </svg>
         Back
       </button>
-      <span class="cl-header__title">{{ view === 'letter' ? 'Cover Letter' : 'Application Editor' }}</span>
+      <span class="cl-header__title">{{
+        view === 'letter' ? 'Cover Letter' : 'Application Editor'
+      }}</span>
     </header>
 
     <!-- Application Editor menu -->
@@ -315,7 +316,6 @@ const statusLabel = computed(() => {
   text-wrap: pretty;
 }
 
-
 .cl-download {
   margin-top: auto;
   flex: 0 0 auto;
@@ -348,5 +348,4 @@ const statusLabel = computed(() => {
   color: rgba(0, 0, 0, 0.32);
   cursor: not-allowed;
 }
-
 </style>
