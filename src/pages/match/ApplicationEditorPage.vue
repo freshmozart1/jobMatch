@@ -28,14 +28,28 @@ const lastUploadedText = ref<string | null>(null)
 let uploadTimer: ReturnType<typeof setTimeout> | null = null
 let uploadInFlight = false
 
+// Tracks per-job DB creation state within this component instance so we don't
+// re-create a job that was already saved, even after switching jobs and back.
+const jobDbCreationState = new Map<string, 'saved' | 'failed'>()
+
+// Reactive flag for the current job's creation failure — drives the error label.
+const jobCreateFailed = ref(false)
+
+// Mirrors the current job object so the job-change flush can pass the OLD job to
+// createJobIfNeeded (props.job has already updated by the time the watch runs).
+const prevJob = ref<ScrapedJob>(props.job)
+
 watch(
   () => props.job.duplicateKey,
   (_newKey, oldKey) => {
+    const jobToFlush = prevJob.value
     if (oldKey && uploadTimer !== null) {
-      void uploadNow(oldKey, text.value)
+      void uploadNow(oldKey, text.value, jobToFlush)
     }
+    prevJob.value = props.job
     lastUploadedText.value = null
     saveStatus.value = 'idle'
+    jobCreateFailed.value = jobDbCreationState.get(props.job.duplicateKey) === 'failed'
     view.value = 'menu'
     try {
       text.value = window.localStorage.getItem(storageKey.value) ?? ''
@@ -79,13 +93,37 @@ function needsReschedule(jobKey: string, snapshot: string): boolean {
   )
 }
 
-async function uploadNow(jobKey: string = props.job.duplicateKey, snapshot: string = text.value) {
+async function createJobIfNeeded(job: ScrapedJob): Promise<boolean> {
+  if (jobDbCreationState.get(job.duplicateKey) === 'saved') return true
+  try {
+    await postJson('/jobs/create', { job, like: true })
+    jobDbCreationState.set(job.duplicateKey, 'saved')
+    if (job.duplicateKey === props.job.duplicateKey) jobCreateFailed.value = false
+    return true
+  } catch (error) {
+    jobDbCreationState.set(job.duplicateKey, 'failed')
+    if (job.duplicateKey === props.job.duplicateKey) {
+      jobCreateFailed.value = true
+      saveStatus.value = 'error'
+    }
+    console.error('Failed to create job in database:', error instanceof Error ? error.message : error)
+    return false
+  }
+}
+
+async function uploadNow(
+  jobKey: string = props.job.duplicateKey,
+  snapshot: string = text.value,
+  jobForCreation: ScrapedJob = props.job,
+) {
   clearUploadTimer()
   const isCurrentJob = () => jobKey === props.job.duplicateKey
   if (shouldSkipUpload(snapshot, isCurrentJob)) return
   uploadInFlight = true
-  if (isCurrentJob()) saveStatus.value = 'saving'
   try {
+    const jobCreated = await createJobIfNeeded(jobForCreation)
+    if (!jobCreated) return
+    if (isCurrentJob()) saveStatus.value = 'saving'
     await postJson('/cover-letters/upload/text', {
       coverLetterText: snapshot,
       jobDuplicateKey: jobKey,
@@ -147,7 +185,9 @@ const statusLabel = computed(() => {
     case 'saved':
       return 'Saved to server'
     case 'error':
-      return 'Save failed — retrying on next edit'
+      return jobCreateFailed.value
+        ? 'Job could not be saved — cover letter not stored. Will retry on next edit.'
+        : 'Save failed — retrying on next edit'
     default:
       return words.value > 0 ? 'Saved as draft' : 'Draft auto-saves as you type'
   }

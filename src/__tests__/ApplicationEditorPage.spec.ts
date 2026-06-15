@@ -20,7 +20,10 @@ describe('ApplicationEditorPage', () => {
   let fetchMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    // Use mockImplementation so each call gets a fresh Response (body streams are single-use).
+    fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    )
     vi.stubGlobal('fetch', fetchMock)
     vi.useFakeTimers()
   })
@@ -128,6 +131,11 @@ describe('ApplicationEditorPage', () => {
     await wrapper.find('.cl-textarea').setValue('Hello world')
     await vi.runAllTimersAsync()
     await flushPromises()
+    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const jobsCreateIndex = urls.findIndex((u) => u.includes('/jobs/create'))
+    const coverLetterIndex = urls.findIndex((u) => u.includes('/cover-letters/upload/text'))
+    expect(jobsCreateIndex).toBeGreaterThanOrEqual(0)
+    expect(coverLetterIndex).toBeGreaterThan(jobsCreateIndex)
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/cover-letters/upload/text'),
       expect.objectContaining({
@@ -138,7 +146,21 @@ describe('ApplicationEditorPage', () => {
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Saved to server')
   })
 
-  it('shows "Save failed" when the upload request returns an error', async () => {
+  it('shows "Save failed" when the cover letter upload returns an error but job creation succeeded', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 201 })) // /jobs/create succeeds
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
+      ) // /cover-letters/upload/text fails
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await wrapper.find('.cl-action').trigger('click')
+    await wrapper.find('.cl-textarea').setValue('Hello')
+    await vi.runAllTimersAsync()
+    await flushPromises()
+    expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Save failed — retrying on next edit')
+  })
+
+  it('shows job creation error and does not call cover letter upload when job creation fails', async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
     )
@@ -147,7 +169,12 @@ describe('ApplicationEditorPage', () => {
     await wrapper.find('.cl-textarea').setValue('Hello')
     await vi.runAllTimersAsync()
     await flushPromises()
-    expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Save failed — retrying on next edit')
+    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    expect(urls.some((u) => u.includes('/jobs/create'))).toBe(true)
+    expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(false)
+    expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe(
+      'Job could not be saved — cover letter not stored. Will retry on next edit.',
+    )
   })
 
   it('skips the upload and stays idle when the textarea is empty', async () => {
@@ -180,9 +207,50 @@ describe('ApplicationEditorPage', () => {
     // onBeforeUnmount fires uploadNow(); flush the async chain
     await flushPromises()
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/cover-letters/upload/text'),
-      expect.any(Object),
+    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    expect(urls.some((u) => u.includes('/jobs/create'))).toBe(true)
+    expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(true)
+  })
+
+  it('only calls /jobs/create once across multiple edits for the same job', async () => {
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await wrapper.find('.cl-action').trigger('click')
+    await wrapper.find('.cl-textarea').setValue('First edit')
+    await vi.runAllTimersAsync()
+    await flushPromises()
+    await wrapper.find('.cl-textarea').setValue('Second edit')
+    await vi.runAllTimersAsync()
+    await flushPromises()
+    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const jobsCreateCalls = urls.filter((u) => u.includes('/jobs/create'))
+    expect(jobsCreateCalls).toHaveLength(1)
+  })
+
+  it('retries job creation on the next edit after a failure', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
+      ) // first /jobs/create fails
+      .mockResolvedValueOnce(new Response('{}', { status: 201 })) // retry /jobs/create succeeds
+      .mockResolvedValueOnce(new Response('{}', { status: 201 })) // /cover-letters/upload/text succeeds
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await wrapper.find('.cl-action').trigger('click')
+
+    // First edit — job creation fails
+    await wrapper.find('.cl-textarea').setValue('First edit')
+    await vi.runAllTimersAsync()
+    await flushPromises()
+    expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe(
+      'Job could not be saved — cover letter not stored. Will retry on next edit.',
     )
+
+    // Second edit — job creation retries and succeeds
+    await wrapper.find('.cl-textarea').setValue('Second edit')
+    await vi.runAllTimersAsync()
+    await flushPromises()
+    expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Saved to server')
+    const urls: string[] = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    expect(urls.filter((u) => u.includes('/jobs/create'))).toHaveLength(2)
+    expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(true)
   })
 })
