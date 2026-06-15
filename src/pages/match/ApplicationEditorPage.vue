@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 import { postJson } from '@/lib/api'
+import CvFileInput from '@/components/CvFileInput.vue'
 
 const props = defineProps<{ job: ScrapedJob }>()
 const emit = defineEmits<{ back: [] }>()
@@ -9,11 +10,11 @@ const emit = defineEmits<{ back: [] }>()
 const storageKey = computed(() => 'jobmatch.coverletter.' + props.job.duplicateKey)
 const text = ref('')
 const view = ref<'menu' | 'letter'>('menu')
-const fileInputRef = ref<HTMLInputElement | null>(null)
 
 // TODO: backend — load CV uploaded status from server on mount/job change
 // (e.g. GET /jobs/{duplicateKey}/cv-status) since it persists across sessions
 const cvUploaded = ref(false)
+const selectedCvFile = ref<File | null>(null)
 
 const letterDone = computed(() => text.value.trim().length > 0)
 
@@ -164,8 +165,11 @@ function handleBack() {
   }
 }
 
-function openFilePicker() {
-  fileInputRef.value?.click()
+async function onCvFileSelected(file: File) {
+  const jobCreated = await createJobIfNeeded(props.job)
+  if (!jobCreated) return
+  selectedCvFile.value = file
+  cvUploaded.value = true
 }
 
 onBeforeUnmount(() => {
@@ -259,50 +263,7 @@ function parseDescription(raw: string): Segment[] {
         </span>
       </button>
 
-      <button type="button" class="cl-action" @click="openFilePicker">
-        <!-- TODO: backend — implement CV upload endpoint (e.g. POST /cover-letters/upload/cv)
-             and update cvUploaded state on success -->
-        <span class="cl-action__icon">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 15V4M12 4L8 8M12 4l4 4"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </span>
-        <span class="cl-action__text">
-          <span class="cl-action__title">Curriculum Vitae</span>
-          <span class="cl-action__sub">{{ cvUploaded ? 'PDF attached' : 'Attach a PDF file' }}</span>
-        </span>
-        <span :class="['cl-action__check', { 'cl-action__check--on': cvUploaded }]">
-          <svg v-if="cvUploaded" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="currentColor" />
-            <path d="M7.4 12.2l3 3 6.2-6.6" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="2" />
-          </svg>
-        </span>
-      </button>
-
-      <!-- TODO: backend — on file change, POST the selected PDF to the upload endpoint;
-           set cvUploaded = true on success -->
-      <input
-        ref="fileInputRef"
-        type="file"
-        accept="application/pdf,.pdf"
-        style="display: none"
-      />
+      <CvFileInput :uploaded="cvUploaded" @fileSelected="onCvFileSelected" />
 
       <!-- TODO: backend — implement application download endpoint
            (e.g. GET /jobs/{duplicateKey}/application.pdf) and wire it to this button -->
