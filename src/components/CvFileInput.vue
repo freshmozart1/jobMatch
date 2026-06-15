@@ -19,8 +19,6 @@ function onChange(event: Event) {
 
 <template>
   <button type="button" class="cl-action" @click="openFilePicker">
-    <!-- TODO: backend — implement CV upload endpoint (e.g. POST /cover-letters/upload/cv)
-         and update cvUploaded state on success -->
     <span class="cl-action__icon">
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
@@ -54,7 +52,6 @@ function onChange(event: Event) {
     </span>
   </button>
 
-  <!-- TODO: backend — POST selectedCvFile to the upload endpoint -->
   <input
     ref="fileInputRef"
     type="file"

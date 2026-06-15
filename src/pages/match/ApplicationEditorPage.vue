@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
-import { getJson, postJson } from '@/lib/api'
+import { getJson, postFormData, postJson } from '@/lib/api'
 import { CoverLetterEditor } from '@/components/coverLetter'
 import { ApplicationEditorHeader, ApplicationEditorMenu } from '@/components/application'
 
@@ -13,7 +13,6 @@ const text = ref('')
 const view = ref<'menu' | 'letter'>('menu')
 
 const cvUploaded = ref(false)
-const selectedCvFile = ref<File | null>(null)
 
 const letterDone = computed(() => text.value.trim().length > 0)
 
@@ -171,10 +170,19 @@ function handleBack() {
 }
 
 async function onCvFileSelected(file: File) {
-  const jobCreated = await createJobIfNeeded(props.job)
-  if (!jobCreated) return
-  selectedCvFile.value = file
-  cvUploaded.value = true
+  const keyAtStart = props.job.duplicateKey
+  const jobAtStart = props.job
+  const jobCreated = await createJobIfNeeded(jobAtStart)
+  if (!jobCreated || keyAtStart !== props.job.duplicateKey) return
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('jobDuplicateKey', keyAtStart)
+  try {
+    await postFormData('/cv/upload', formData)
+    if (keyAtStart === props.job.duplicateKey) cvUploaded.value = true
+  } catch (error) {
+    console.error('Failed to upload CV:', error instanceof Error ? error.message : error)
+  }
 }
 
 onBeforeUnmount(() => {
