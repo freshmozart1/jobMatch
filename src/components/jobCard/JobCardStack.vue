@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { JobCard, JobCardContainer } from '@/components'
+import JobCard from './JobCard.vue'
+import JobCardContainer from './JobCardContainer.vue'
 import type { ScrapedJob } from './types'
 
 const props = withDefaults(defineProps<{ jobs: ScrapedJob[]; emptyLabel?: string }>(), {

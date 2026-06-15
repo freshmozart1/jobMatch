@@ -54,14 +54,26 @@ function scheduleUpload() {
   uploadTimer = setTimeout(() => void uploadNow(), UPLOAD_DEBOUNCE_MS)
 }
 
+function shouldSkipUpload(snapshot: string, isCurrentJob: () => boolean): boolean {
+  if (!snapshot.trim()) {
+    if (isCurrentJob()) saveStatus.value = 'idle'
+    return true
+  }
+  return snapshot === lastUploadedText.value || uploadInFlight
+}
+
+function needsReschedule(jobKey: string, snapshot: string): boolean {
+  return (
+    jobKey === props.job.duplicateKey &&
+    text.value !== snapshot &&
+    text.value !== lastUploadedText.value
+  )
+}
+
 async function uploadNow(jobKey: string = props.job.duplicateKey, snapshot: string = text.value) {
   clearUploadTimer()
   const isCurrentJob = () => jobKey === props.job.duplicateKey
-  if (!snapshot.trim()) {
-    if (isCurrentJob()) saveStatus.value = 'idle'
-    return
-  }
-  if (snapshot === lastUploadedText.value || uploadInFlight) return
+  if (shouldSkipUpload(snapshot, isCurrentJob)) return
   uploadInFlight = true
   if (isCurrentJob()) saveStatus.value = 'saving'
   try {
@@ -81,13 +93,7 @@ async function uploadNow(jobKey: string = props.job.duplicateKey, snapshot: stri
     )
   } finally {
     uploadInFlight = false
-    if (
-      jobKey === props.job.duplicateKey &&
-      text.value !== snapshot &&
-      text.value !== lastUploadedText.value
-    ) {
-      scheduleUpload()
-    }
+    if (needsReschedule(jobKey, snapshot)) scheduleUpload()
   }
 }
 

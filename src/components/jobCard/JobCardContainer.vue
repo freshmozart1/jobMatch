@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { JobCard, LikeContainer } from '@/components'
+import JobCard from './JobCard.vue'
+import LikeContainer from '../LikeContainer.vue'
 import type { ScrapedJob } from './types'
 
 defineProps({

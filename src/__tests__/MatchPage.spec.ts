@@ -61,36 +61,22 @@ function createDeferred<T>() {
   return { promise, resolve, reject }
 }
 
-function mockFetchPipeline(options: { failedJobPageUrls?: string[] } = {}) {
-  const failedJobPageUrls = new Set(options.failedJobPageUrls ?? [])
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+function buildFetchMock(
+  jobPageHandler: (jobUrl: string) => Promise<Response>,
+) {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input.toString()
     const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
 
     if (url.endsWith('/scrape/linkedin/job-links')) {
       return createJsonResponse(jobLinksByKeyword)
     }
-
     if (url.endsWith('/jobs/filter-job-links')) {
       return createJsonResponse(requestBody)
     }
-
     if (url.endsWith('/scrape/linkedin/job-page')) {
-      const jobUrl = requestBody?.url as string
-
-      if (failedJobPageUrls.has(jobUrl)) {
-        return createJsonResponse({ error: 'Failed to scrape job page.' }, { status: 502 })
-      }
-
-      const job = testJobs.find((candidate) => candidate.sourceUrl === jobUrl)
-
-      if (!job) {
-        return createJsonResponse({ error: 'Unknown test job.' }, { status: 404 })
-      }
-
-      return createJsonResponse(job)
+      return jobPageHandler(requestBody?.url as string)
     }
-
     if (url.endsWith('/jobs/liked-average-similarity')) {
       const similarity = similarityByEmbedding.get(JSON.stringify(requestBody)) ?? null
       return createJsonResponse({ similarity })
@@ -98,9 +84,23 @@ function mockFetchPipeline(options: { failedJobPageUrls?: string[] } = {}) {
 
     return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
   })
+}
+
+function mockFetchPipeline(options: { failedJobPageUrls?: string[] } = {}) {
+  const failedJobPageUrls = new Set(options.failedJobPageUrls ?? [])
+
+  const fetchMock = buildFetchMock(async (jobUrl) => {
+    if (failedJobPageUrls.has(jobUrl)) {
+      return createJsonResponse({ error: 'Failed to scrape job page.' }, { status: 502 })
+    }
+    const job = testJobs.find((candidate) => candidate.sourceUrl === jobUrl)
+    if (!job) {
+      return createJsonResponse({ error: 'Unknown test job.' }, { status: 404 })
+    }
+    return createJsonResponse(job)
+  })
 
   vi.stubGlobal('fetch', fetchMock)
-
   return fetchMock
 }
 
@@ -177,34 +177,12 @@ describe('MatchPage', () => {
       [testJobs[0]!.sourceUrl, firstJobPageResponse],
       [testJobs[1]!.sourceUrl, secondJobPageResponse],
     ])
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = input.toString()
-      const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
-
-      if (url.endsWith('/scrape/linkedin/job-links')) {
-        return createJsonResponse(jobLinksByKeyword)
+    const fetchMock = buildFetchMock(async (jobUrl) => {
+      const response = jobPageResponses.get(jobUrl)
+      if (!response) {
+        return createJsonResponse({ error: 'Unknown test job.' }, { status: 404 })
       }
-
-      if (url.endsWith('/jobs/filter-job-links')) {
-        return createJsonResponse(requestBody)
-      }
-
-      if (url.endsWith('/scrape/linkedin/job-page')) {
-        const response = jobPageResponses.get(requestBody?.url as string)
-
-        if (!response) {
-          return createJsonResponse({ error: 'Unknown test job.' }, { status: 404 })
-        }
-
-        return response.promise
-      }
-
-      if (url.endsWith('/jobs/liked-average-similarity')) {
-        const similarity = similarityByEmbedding.get(JSON.stringify(requestBody)) ?? null
-        return createJsonResponse({ similarity })
-      }
-
-      return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
+      return response.promise
     })
     vi.stubGlobal('fetch', fetchMock)
 
