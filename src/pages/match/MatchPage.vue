@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { BrandBar, JobCardStack, MatchFilterBar } from '@/components'
 import ApplicationEditorPage from './ApplicationEditorPage.vue'
+import MatchEmpty from './MatchEmpty.vue'
 import SearchPage from './SearchPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 import { postJson } from '@/lib/api'
@@ -12,11 +13,24 @@ const jobs = ref<ScrapedJob[]>([])
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
 const failedJobPageUrls = ref<string[]>([])
+const cosineFilterOn = ref(false)
+const cosineThreshold = ref(50)
+const keywords = ref<string[]>(loadKeywords())
+const searchOpen = ref(false)
+const coverLetterOpen = ref(false)
+const activeJob = ref<ScrapedJob | null>(null)
 
-// In-card match filter: switch between all jobs and only jobs whose cosine
-// similarity is >= threshold% (set via the adjacent number input).
-const filterOn = ref(false)
-const threshold = ref(50)
+const matchEnabled = computed(() => keywords.value.length > 0)
+const visibleJobs = computed(() =>
+  cosineFilterOn.value
+    ? jobs.value.filter(
+        (job) => Math.round((job.cosineSimilarity ?? 0) * 100) >= cosineThreshold.value,
+      )
+    : jobs.value,
+)
+const emptyLabel = computed(() =>
+  cosineFilterOn.value ? `No jobs at or above ${cosineThreshold.value}% match` : 'No more jobs',
+)
 
 function loadKeywords(): string[] {
   try {
@@ -28,11 +42,7 @@ function loadKeywords(): string[] {
   }
 }
 
-const keywords = ref<string[]>(loadKeywords())
-const searchOpen = ref(false)
-const matchEnabled = computed(() => keywords.value.length > 0)
-
-function updateKeywords(next: string[]) {
+function updateKeywords(next: string[]): void {
   keywords.value = next
   try {
     window.localStorage.setItem('jobmatch.searchkeywords', JSON.stringify(next))
@@ -58,29 +68,16 @@ function getDistance(): number {
   }
 }
 
-const visibleJobs = computed(() =>
-  filterOn.value
-    ? jobs.value.filter((job) => Math.round((job.cosineSimilarity ?? 0) * 100) >= threshold.value)
-    : jobs.value,
-)
-
-const emptyLabel = computed(() =>
-  filterOn.value ? `No jobs at or above ${threshold.value}% match` : 'No more jobs',
-)
-
-const coverLetterOpen = ref(false)
-const activeJob = ref<ScrapedJob | null>(null)
-
-function openCoverLetter(job: ScrapedJob) {
+function openCoverLetter(job: ScrapedJob): void {
   activeJob.value = job
   coverLetterOpen.value = true
 }
 
-function closeCoverLetter() {
+function closeCoverLetter(): void {
   coverLetterOpen.value = false
 }
 
-async function createJob(job: ScrapedJob, like: boolean) {
+async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
   try {
     await postJson('/jobs/create', { job, like })
   } catch (error) {
@@ -153,25 +150,7 @@ watch(searchOpen, (open) => {
   <main class="match-page">
     <BrandBar />
 
-    <template v-if="!matchEnabled">
-      <div class="match-empty">
-        <div class="match-empty__icon">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              d="M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5L20 20"
-            />
-          </svg>
-        </div>
-        <h2 class="match-empty__title">No keywords yet</h2>
-        <p class="match-empty__text">Add search keywords to start swiping jobs.</p>
-        <button type="button" class="match-empty__cta" @click="searchOpen = true">
-          Add keywords
-        </button>
-      </div>
-    </template>
+    <MatchEmpty v-if="!matchEnabled" @open-search="searchOpen = true" />
     <template v-else>
       <p v-if="errorMessage" class="match-page__status match-page__status--error">
         {{ errorMessage }}
@@ -187,12 +166,12 @@ watch(searchOpen, (open) => {
           {{ failedJobPageUrls.length }} job page request failed.
         </p>
         <MatchFilterBar
-          v-model:enabled="filterOn"
-          v-model:threshold="threshold"
+          v-model:enabled="cosineFilterOn"
+          v-model:threshold="cosineThreshold"
           @search="searchOpen = true"
         />
         <JobCardStack
-          :key="filterOn ? 'min-' + threshold : 'all'"
+          :key="cosineFilterOn ? 'min-' + cosineThreshold : 'all'"
           :jobs="visibleJobs"
           :empty-label="emptyLabel"
           @like="createJob"
