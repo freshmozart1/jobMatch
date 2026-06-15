@@ -108,8 +108,10 @@ describe('ApplicationEditorPage', () => {
     expect(wrapper.find('.cl-action .cl-action__sub').text()).toBe('Draft written')
   })
 
-  it('disables the download button when no CV has been uploaded', () => {
+  it('disables the download button when no CV has been uploaded', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 404 })))
     const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
     expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(true)
   })
 
@@ -117,13 +119,6 @@ describe('ApplicationEditorPage', () => {
     const wrapper = mount(ApplicationEditorPage, { props: { job } })
     await flushPromises()
     expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('leaves the download button disabled when the server returns 404 for CV status', async () => {
-    fetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 404 })))
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await flushPromises()
-    expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('re-fetches CV status for the new job when the active job changes', async () => {

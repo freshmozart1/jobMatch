@@ -6,7 +6,8 @@ export async function getJson<ResponseBody>(path: string): Promise<ResponseBody>
   if (!response.ok) {
     throw new Error(await getResponseErrorMessage(response))
   }
-  return response.json() as Promise<ResponseBody>
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as ResponseBody
 }
 
 export async function postJson<ResponseBody>(path: string, body: unknown): Promise<ResponseBody> {

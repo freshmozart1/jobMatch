@@ -57,6 +57,12 @@ describe('getJson', () => {
     fetchMock.mockResolvedValue(new Response('not json', { status: 503, statusText: '' }))
     await expect(getJson('/fail')).rejects.toThrow('Request failed with status 503')
   })
+
+  it('returns undefined for a 2xx response with an empty body', async () => {
+    fetchMock.mockResolvedValue(new Response('', { status: 200 }))
+    const result = await getJson('/empty')
+    expect(result).toBeUndefined()
+  })
 })
 
 describe('postJson', () => {
