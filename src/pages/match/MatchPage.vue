@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { JobCardStack, MatchFilterBar } from '@/components'
-import CoverLetterPage from './CoverLetterPage.vue'
+import CoverLetterPage from './ApplicationEditorPage.vue'
 import SearchPage from './SearchPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 import { postJson } from '@/lib/api'
@@ -186,7 +186,9 @@ watch(searchOpen, (open) => {
           @edit="openCoverLetter"
         />
       </template>
-      <p v-else class="match-page__status">Loading jobs...</p>
+      <div v-else class="match-status-fill">
+        <p class="match-page__status">Loading jobs...</p>
+      </div>
     </template>
 
     <div :class="['cl-overlay', { 'cl-overlay--open': coverLetterOpen }]">
@@ -343,6 +345,33 @@ watch(searchOpen, (open) => {
 
 .match-empty__cta:active {
   opacity: 0.7;
+}
+
+/* Full-area state for initial load (no cards yet) */
+.match-status-fill {
+  flex: 1 1 0;
+  min-height: 0;
+  width: var(--job-card-width);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .match-page__status--loading,
+  .match-status-fill .match-page__status {
+    animation: match-status-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes match-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 /* Cover letter fly-in overlay */
