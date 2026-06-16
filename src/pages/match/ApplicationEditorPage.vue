@@ -192,8 +192,12 @@ async function downloadApplication() {
     const a = document.createElement('a')
     a.href = url
     a.download = 'application.pdf'
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => {
+      URL.revokeObjectURL(url)
+      a.remove()
+    }, 0)
   } catch (error) {
     console.error('Failed to download application:', error instanceof Error ? error.message : error)
   }

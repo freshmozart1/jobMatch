@@ -307,7 +307,9 @@ describe('ApplicationEditorPage', () => {
 
   describe('download application', () => {
     it('calls GET /application/:duplicateKey when download button is clicked', async () => {
-      vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() })
+      const createObjectURL = vi.fn(() => 'blob:fake')
+      const revokeObjectURL = vi.fn()
+      vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
       const anchorClick = vi.fn()
       const originalCreate = document.createElement.bind(document)
       vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
@@ -332,6 +334,9 @@ describe('ApplicationEditorPage', () => {
       const urls = getCalledUrls()
       expect(urls.some((u) => u.includes('/application/linkedin:1001'))).toBe(true)
       expect(anchorClick).toHaveBeenCalled()
+
+      await vi.runAllTimersAsync()
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake')
 
       vi.restoreAllMocks()
       vi.unstubAllGlobals()
