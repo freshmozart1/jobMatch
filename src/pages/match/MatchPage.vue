@@ -85,8 +85,23 @@ async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
   }
 }
 
+const MAX_SIMILARITY_CONCURRENCY = 2
+let similarityInFlight = 0
+const similarityQueue: Array<() => void> = []
+
+function drainSimilarityQueue(): void {
+  while (similarityInFlight < MAX_SIMILARITY_CONCURRENCY && similarityQueue.length > 0) {
+    similarityInFlight++
+    similarityQueue.shift()!()
+  }
+}
+
 async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
   if (!job.embedding?.length) return
+  await new Promise<void>((resolve) => {
+    similarityQueue.push(resolve)
+    drainSimilarityQueue()
+  })
   try {
     const result = await postJson<{ similarity: number | null }>(
       '/jobs/liked-average-similarity',
@@ -97,10 +112,15 @@ async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
     }
   } catch {
     // similarity is optional; silently ignore errors
+  } finally {
+    similarityInFlight--
+    drainSimilarityQueue()
   }
 }
 
 async function fetchJobs(): Promise<void> {
+  similarityQueue.length = 0
+  similarityInFlight = 0
   isLoading.value = true
   jobs.value = []
   errorMessage.value = null
