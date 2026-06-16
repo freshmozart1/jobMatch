@@ -85,12 +85,6 @@ async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
   }
 }
 
-const MAX_SIMILARITY_CONCURRENCY = 2
-let similarityInFlight = 0
-let similarityGeneration = 0
-const similarityQueue: Array<() => void> = []
-let similarityAbortController: AbortController | null = null
-
 const MAX_SCRAPE_CONCURRENCY = 2
 let scrapeInFlight = 0
 let scrapeGeneration = 0
@@ -110,45 +104,10 @@ function searchParamsChanged(): boolean {
   )
 }
 
-function drainSimilarityQueue(): void {
-  while (similarityInFlight < MAX_SIMILARITY_CONCURRENCY && similarityQueue.length > 0) {
-    similarityInFlight++
-    similarityQueue.shift()!()
-  }
-}
-
 function drainScrapeQueue(): void {
   while (scrapeInFlight < MAX_SCRAPE_CONCURRENCY && scrapeQueue.length > 0) {
     scrapeInFlight++
     scrapeQueue.shift()!()
-  }
-}
-
-async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
-  if (!job.embedding?.length) return
-  const generation = similarityGeneration
-  const signal = similarityAbortController?.signal
-  await new Promise<void>((resolve) => {
-    similarityQueue.push(resolve)
-    drainSimilarityQueue()
-  })
-  if (generation !== similarityGeneration) return
-  try {
-    const result = await postJson<{ similarity: number | null }>(
-      '/jobs/liked-average-similarity',
-      job.embedding,
-      signal,
-    )
-    if (typeof result.similarity === 'number') {
-      job.cosineSimilarity = result.similarity
-    }
-  } catch {
-    // similarity is optional; silently ignore errors
-  } finally {
-    if (generation === similarityGeneration) {
-      similarityInFlight--
-      drainSimilarityQueue()
-    }
   }
 }
 
@@ -164,8 +123,7 @@ async function scrapeJobPage(url: string, signal: AbortSignal): Promise<void> {
     // Stale result from a superseded search — discard silently; belongs to neither the old
     // (already reset) nor the new search's jobs/failures.
     if (generation !== scrapeGeneration) return
-    const pushedIndex = jobs.value.push(scrapedJob) - 1
-    void fetchCosineSimilarity(jobs.value[pushedIndex]!)
+    jobs.value.push(scrapedJob)
   } catch {
     if (generation === scrapeGeneration) {
       failedJobPageUrls.value.push(url)
@@ -180,11 +138,6 @@ async function scrapeJobPage(url: string, signal: AbortSignal): Promise<void> {
 
 async function fetchJobs(): Promise<void> {
   lastFetchedParams = { keywords: [...keywords.value], city: getCity(), distance: getDistance() }
-  similarityAbortController?.abort()
-  similarityAbortController = new AbortController()
-  similarityGeneration++
-  for (const resolve of similarityQueue.splice(0)) resolve()
-  similarityInFlight = 0
   scrapeAbortController?.abort()
   scrapeAbortController = new AbortController()
   scrapeGeneration++

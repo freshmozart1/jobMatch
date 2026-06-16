@@ -18,6 +18,7 @@ const testJobs: ScrapedJob[] = [
     scrapedAt: '2026-06-08T10:00:00.000Z',
     duplicateKey: 'linkedin:1001',
     embedding: [0.9, 0.1],
+    cosineSimilarity: 0.9,
   },
   {
     sourceHostname: 'de.linkedin.com',
@@ -30,14 +31,9 @@ const testJobs: ScrapedJob[] = [
     scrapedAt: '2026-06-08T11:00:00.000Z',
     duplicateKey: 'linkedin:1002',
     embedding: [0.1, 0.9],
+    cosineSimilarity: 0.3,
   },
 ]
-
-// Cosine similarity the mock server returns for each job's embedding.
-const similarityByEmbedding = new Map<string, number>([
-  [JSON.stringify(testJobs[0]!.embedding), 0.9],
-  [JSON.stringify(testJobs[1]!.embedding), 0.3],
-])
 
 const jobLinksByKeyword = {
   'Full Stack Engineer': testJobs.map((job) => job.sourceUrl),
@@ -77,10 +73,6 @@ function buildFetchMock(
     }
     if (url.endsWith('/scrape/linkedin/job-page')) {
       return jobPageHandler(requestBody?.url as string)
-    }
-    if (url.endsWith('/jobs/liked-average-similarity')) {
-      const similarity = similarityByEmbedding.get(JSON.stringify(requestBody)) ?? null
-      return createJsonResponse({ similarity })
     }
 
     return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
@@ -205,9 +197,6 @@ describe('MatchPage', () => {
           const job = testJobs.find((j) => j.sourceUrl === (requestBody?.url as string))
           return createJsonResponse(job ?? { error: 'Unknown' })
         }
-        if (url.endsWith('/jobs/liked-average-similarity')) {
-          return createJsonResponse({ similarity: null })
-        }
         return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
       }),
     )
@@ -288,9 +277,6 @@ describe('MatchPage', () => {
           const job = testJobs.find((j) => j.sourceUrl === (requestBody?.url as string))
           return createJsonResponse(job ?? { error: 'Unknown' })
         }
-        if (url.endsWith('/jobs/liked-average-similarity')) {
-          return createJsonResponse({ similarity: null })
-        }
         return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
       }),
     )
@@ -352,28 +338,6 @@ describe('MatchPage', () => {
     expect(jobLinksCallsAfter).toBe(jobLinksCallsBefore)
   })
 
-  it('passes an AbortSignal to liked-average-similarity requests', async () => {
-    const fetchMock = mockFetchPipeline()
-
-    const wrapper = await mountLoadedMatchPage()
-
-    await vi.waitFor(() => {
-      const similarityCalls = fetchMock.mock.calls.filter((args) =>
-        args[0]!.toString().endsWith('/jobs/liked-average-similarity'),
-      )
-      expect(similarityCalls.length).toBeGreaterThan(0)
-    })
-
-    const similarityCalls = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/jobs/liked-average-similarity'),
-    )
-    for (const [, init] of similarityCalls) {
-      expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal)
-    }
-
-    await wrapper.unmount()
-  })
-
   it('limits concurrent job page scrape requests to 2 at a time', async () => {
     const thirdJob: ScrapedJob = {
       sourceHostname: 'de.linkedin.com',
@@ -413,9 +377,6 @@ describe('MatchPage', () => {
         const deferred = deferredResponses.get(requestBody?.url as string)
         if (!deferred) return createJsonResponse({ error: 'Unknown URL' }, { status: 404 })
         return deferred.promise
-      }
-      if (url.endsWith('/jobs/liked-average-similarity')) {
-        return createJsonResponse({ similarity: null })
       }
       return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
     })
@@ -590,13 +551,11 @@ describe('MatchPage', () => {
   it('shows the cosine similarity fetched for the top card as a percentage', async () => {
     const wrapper = await mountLoadedMatchPage()
 
-    await vi.waitFor(() => {
-      const indicator = wrapper.find(
-        '.job-card-stack__current [data-testid="cosineSimilarityIndicator"]',
-      )
-      expect(indicator.exists()).toBe(true)
-      expect(indicator.find('.cosine-indicator__value').text()).toBe('90%')
-    })
+    const indicator = wrapper.find(
+      '.job-card-stack__current [data-testid="cosineSimilarityIndicator"]',
+    )
+    expect(indicator.exists()).toBe(true)
+    expect(indicator.find('.cosine-indicator__value').text()).toBe('90%')
   })
 
   it('filters out jobs below the threshold when the match filter is enabled', async () => {
