@@ -17,7 +17,6 @@ const testJobs: ScrapedJob[] = [
     descriptionText: 'Build product features.',
     scrapedAt: '2026-06-08T10:00:00.000Z',
     duplicateKey: 'linkedin:1001',
-    embedding: [0.9, 0.1],
     cosineSimilarity: 0.9,
   },
   {
@@ -30,7 +29,6 @@ const testJobs: ScrapedJob[] = [
     descriptionText: 'Build UI features.',
     scrapedAt: '2026-06-08T11:00:00.000Z',
     duplicateKey: 'linkedin:1002',
-    embedding: [0.1, 0.9],
     cosineSimilarity: 0.3,
   },
 ]
@@ -349,7 +347,6 @@ describe('MatchPage', () => {
       descriptionText: 'Build backend features.',
       scrapedAt: '2026-06-08T12:00:00.000Z',
       duplicateKey: 'linkedin:1003',
-      embedding: [0.5, 0.5],
     }
 
     const deferredResponses = new Map([
@@ -551,11 +548,13 @@ describe('MatchPage', () => {
   it('shows the cosine similarity fetched for the top card as a percentage', async () => {
     const wrapper = await mountLoadedMatchPage()
 
-    const indicator = wrapper.find(
-      '.job-card-stack__current [data-testid="cosineSimilarityIndicator"]',
-    )
-    expect(indicator.exists()).toBe(true)
-    expect(indicator.find('.cosine-indicator__value').text()).toBe('90%')
+    await vi.waitFor(() => {
+      const indicator = wrapper.find(
+        '.job-card-stack__current [data-testid="cosineSimilarityIndicator"]',
+      )
+      expect(indicator.exists()).toBe(true)
+      expect(indicator.find('.cosine-indicator__value').text()).toBe('90%')
+    })
   })
 
   it('filters out jobs below the threshold when the match filter is enabled', async () => {
