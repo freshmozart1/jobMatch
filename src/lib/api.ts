@@ -22,13 +22,18 @@ export async function postFormData<ResponseBody>(path: string, formData: FormDat
   return (text ? JSON.parse(text) : undefined) as ResponseBody
 }
 
-export async function postJson<ResponseBody>(path: string, body: unknown): Promise<ResponseBody> {
+export async function postJson<ResponseBody>(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<ResponseBody> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal,
   })
 
   if (!response.ok) {
