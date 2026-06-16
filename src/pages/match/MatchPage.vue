@@ -90,10 +90,22 @@ let similarityInFlight = 0
 let similarityGeneration = 0
 const similarityQueue: Array<() => void> = []
 
+const MAX_SCRAPE_CONCURRENCY = 2
+let scrapeInFlight = 0
+let scrapeGeneration = 0
+const scrapeQueue: Array<() => void> = []
+
 function drainSimilarityQueue(): void {
   while (similarityInFlight < MAX_SIMILARITY_CONCURRENCY && similarityQueue.length > 0) {
     similarityInFlight++
     similarityQueue.shift()!()
+  }
+}
+
+function drainScrapeQueue(): void {
+  while (scrapeInFlight < MAX_SCRAPE_CONCURRENCY && scrapeQueue.length > 0) {
+    scrapeInFlight++
+    scrapeQueue.shift()!()
   }
 }
 
@@ -123,10 +135,34 @@ async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
   }
 }
 
+async function scrapeJobPage(url: string): Promise<void> {
+  const generation = scrapeGeneration
+  await new Promise<void>((resolve) => {
+    scrapeQueue.push(resolve)
+    drainScrapeQueue()
+  })
+  if (generation !== scrapeGeneration) return
+  try {
+    const scrapedJob = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
+    jobs.value.push(scrapedJob)
+    void fetchCosineSimilarity(jobs.value.at(-1)!)
+  } catch {
+    failedJobPageUrls.value.push(url)
+  } finally {
+    if (generation === scrapeGeneration) {
+      scrapeInFlight--
+      drainScrapeQueue()
+    }
+  }
+}
+
 async function fetchJobs(): Promise<void> {
   similarityGeneration++
   for (const resolve of similarityQueue.splice(0)) resolve()
   similarityInFlight = 0
+  scrapeGeneration++
+  for (const resolve of scrapeQueue.splice(0)) resolve()
+  scrapeInFlight = 0
   isLoading.value = true
   jobs.value = []
   errorMessage.value = null
@@ -145,17 +181,8 @@ async function fetchJobs(): Promise<void> {
       '/jobs/filter-job-links',
       jobLinksByKeyword,
     )
-    await Promise.all(
-      [...new Set(Object.values(filteredJobLinksByKeyword).flat())].map(async (url) => {
-        try {
-          const scrapedJob = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
-          jobs.value.push(scrapedJob)
-          void fetchCosineSimilarity(jobs.value.at(-1)!)
-        } catch {
-          failedJobPageUrls.value.push(url)
-        }
-      }),
-    )
+    const urls = [...new Set(Object.values(filteredJobLinksByKeyword).flat())]
+    await Promise.all(urls.map((url) => scrapeJobPage(url)))
   } catch (error) {
     jobs.value = []
     errorMessage.value = error instanceof Error ? error.message : 'Failed to fetch jobs.'

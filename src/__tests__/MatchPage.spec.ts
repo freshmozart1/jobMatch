@@ -180,6 +180,83 @@ describe('MatchPage', () => {
     expect(container.props('job')).toMatchObject({ title: testJobs[0]!.title })
   })
 
+  it('limits concurrent job page scrape requests to 2 at a time', async () => {
+    const thirdJob: ScrapedJob = {
+      sourceHostname: 'de.linkedin.com',
+      sourceJobId: '1003',
+      sourceUrl: 'https://de.linkedin.com/jobs/view/backend-engineer-1003/',
+      title: 'Backend Engineer',
+      company: 'Third GmbH',
+      location: 'Hamburg',
+      descriptionText: 'Build backend features.',
+      scrapedAt: '2026-06-08T12:00:00.000Z',
+      duplicateKey: 'linkedin:1003',
+      embedding: [0.5, 0.5],
+    }
+
+    const deferredResponses = new Map([
+      [testJobs[0]!.sourceUrl, createDeferred<Response>()],
+      [testJobs[1]!.sourceUrl, createDeferred<Response>()],
+      [thirdJob.sourceUrl, createDeferred<Response>()],
+    ])
+
+    const allThreeJobs = [...testJobs, thirdJob]
+    const jobLinksByKeywordWithThree = {
+      'Full Stack Engineer': allThreeJobs.map((job) => job.sourceUrl),
+    }
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString()
+      const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
+
+      if (url.endsWith('/scrape/linkedin/job-links')) {
+        return createJsonResponse(jobLinksByKeywordWithThree)
+      }
+      if (url.endsWith('/jobs/filter-job-links')) {
+        return createJsonResponse(requestBody)
+      }
+      if (url.endsWith('/scrape/linkedin/job-page')) {
+        const deferred = deferredResponses.get(requestBody?.url as string)
+        if (!deferred) return createJsonResponse({ error: 'Unknown URL' }, { status: 404 })
+        return deferred.promise
+      }
+      if (url.endsWith('/jobs/liked-average-similarity')) {
+        return createJsonResponse({ similarity: null })
+      }
+      return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    mount(MatchPage)
+
+    // Wait until exactly 2 job-page scrape requests are in-flight (+ 2 pipeline calls = 4 total).
+    await vi.waitFor(() => {
+      const jobPageCalls = fetchMock.mock.calls.filter((args) =>
+        args[0]!.toString().endsWith('/scrape/linkedin/job-page'),
+      )
+      expect(jobPageCalls).toHaveLength(2)
+    })
+
+    // The third URL must NOT have been requested yet.
+    const jobPageUrls = fetchMock.mock.calls
+      .filter((args) => args[0]!.toString().endsWith('/scrape/linkedin/job-page'))
+      .map((args) => JSON.parse((args[1] as RequestInit).body!.toString()).url as string)
+    expect(jobPageUrls).not.toContain(thirdJob.sourceUrl)
+
+    // Resolve the first — the third must now start.
+    deferredResponses.get(testJobs[0]!.sourceUrl)!.resolve(createJsonResponse(testJobs[0]))
+    await vi.waitFor(() => {
+      const jobPageCalls = fetchMock.mock.calls.filter((args) =>
+        args[0]!.toString().endsWith('/scrape/linkedin/job-page'),
+      )
+      expect(jobPageCalls).toHaveLength(3)
+    })
+
+    // Clean up remaining deferred promises.
+    deferredResponses.get(testJobs[1]!.sourceUrl)!.resolve(createJsonResponse(testJobs[1]))
+    deferredResponses.get(thirdJob.sourceUrl)!.resolve(createJsonResponse(thirdJob))
+  })
+
   it('renders a scraped job while later job page requests are still pending', async () => {
     const firstJobPageResponse = createDeferred<Response>()
     const secondJobPageResponse = createDeferred<Response>()
