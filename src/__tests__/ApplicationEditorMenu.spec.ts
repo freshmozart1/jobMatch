@@ -23,6 +23,18 @@ describe('ApplicationEditorMenu', () => {
       const wrapper = mountMenu({ cvUploaded: true })
       expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
     })
+
+    it('emits "download" when clicked and cvUploaded is true', async () => {
+      const wrapper = mountMenu({ cvUploaded: true })
+      await wrapper.find('.cl-download').trigger('click')
+      expect(wrapper.emitted('download')).toBeTruthy()
+    })
+
+    it('does not emit "download" when the button is disabled', async () => {
+      const wrapper = mountMenu({ cvUploaded: false })
+      await wrapper.find('.cl-download').trigger('click')
+      expect(wrapper.emitted('download')).toBeFalsy()
+    })
   })
 
   describe('cover letter action', () => {

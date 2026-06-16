@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
-import { getJson, postFormData, postJson } from '@/lib/api'
+import { getBlob, getJson, postFormData, postJson } from '@/lib/api'
 import { CoverLetterEditor } from '@/components/coverLetter'
 import { ApplicationEditorHeader, ApplicationEditorMenu } from '@/components/application'
 
@@ -26,6 +26,10 @@ const saveStatus = ref<SaveStatus>('idle')
 const lastUploadedText = ref<string | null>(null)
 let uploadTimer: ReturnType<typeof setTimeout> | null = null
 let uploadInFlight = false
+let downloadInFlight = false
+let downloadAbortController: AbortController | null = null
+let downloadCleanupTimer: ReturnType<typeof setTimeout> | null = null
+let pendingDownloadRevoke: (() => void) | null = null
 
 // Tracks per-job DB creation state within this component instance so we don't
 // re-create a job that was already saved, even after switching jobs and back.
@@ -114,7 +118,7 @@ async function createJobIfNeeded(job: ScrapedJob): Promise<boolean> {
     }
     console.error(
       'Failed to create job in database:',
-      error instanceof Error ? error.message : error,
+      error instanceof Error ? error.message : String(error),
     )
     return false
   }
@@ -143,7 +147,7 @@ async function uploadNow(
     }
   } catch (error) {
     if (isCurrentJob()) saveStatus.value = 'error'
-    console.error('Failed to upload cover letter:', error instanceof Error ? error.message : error)
+    console.error('Failed to upload cover letter:', error instanceof Error ? error.message : String(error))
   } finally {
     uploadInFlight = false
     if (needsReschedule(newKey, snapshot)) scheduleUpload()
@@ -185,9 +189,46 @@ async function onCvFileSelected(file: File) {
   }
 }
 
+async function downloadApplication() {
+  if (downloadInFlight) return
+  downloadInFlight = true
+  downloadAbortController = new AbortController()
+  try {
+    const blob = await getBlob('/application/' + props.job.duplicateKey, downloadAbortController.signal)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'application-' + props.job.duplicateKey.replace(/:/g, '-') + '.pdf'
+    document.body.appendChild(a)
+    a.click()
+    const cleanup = () => {
+      URL.revokeObjectURL(url)
+      a.remove()
+      downloadCleanupTimer = null
+      pendingDownloadRevoke = null
+    }
+    pendingDownloadRevoke = cleanup
+    downloadCleanupTimer = setTimeout(cleanup, 0)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    console.error(
+      'Failed to download application:',
+      error instanceof Error ? error.message : String(error),
+    )
+  } finally {
+    downloadInFlight = false
+    downloadAbortController = null
+  }
+}
+
 onBeforeUnmount(() => {
   if (uploadTimer !== null) {
     void uploadNow()
+  }
+  downloadAbortController?.abort()
+  if (downloadCleanupTimer !== null) {
+    clearTimeout(downloadCleanupTimer)
+    pendingDownloadRevoke?.()
   }
 })
 
@@ -225,6 +266,7 @@ const statusLabel = computed(() => {
       :cv-uploaded="cvUploaded"
       @open-letter="view = 'letter'"
       @file-selected="onCvFileSelected"
+      @download="downloadApplication"
     />
 
     <!-- Cover letter editor -->

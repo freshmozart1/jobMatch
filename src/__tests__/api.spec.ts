@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getJson, postJson } from '@/lib/api'
+import { getBlob, getJson, postJson } from '@/lib/api'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
@@ -62,6 +62,58 @@ describe('getJson', () => {
     fetchMock.mockResolvedValue(new Response('', { status: 200 }))
     const result = await getJson('/empty')
     expect(result).toBeUndefined()
+  })
+})
+
+describe('getBlob', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('sends a GET request to the correct URL', async () => {
+    fetchMock.mockResolvedValue(new Response(new Blob(['%PDF']), { status: 200 }))
+    await getBlob('/application/linkedin:1001')
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3000/application/linkedin:1001')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('returns a Blob on a 2xx response', async () => {
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46])
+    fetchMock.mockResolvedValue(new Response(pdfBytes, { status: 200 }))
+    const result = await getBlob('/application/linkedin:1001')
+    expect(result.constructor.name).toBe('Blob')
+    expect(result.size).toBe(4)
+  })
+
+  it('throws with the server error message on a non-2xx JSON response', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Cover letter not found' }), { status: 404 }),
+    )
+    await expect(getBlob('/application/missing')).rejects.toThrow('Cover letter not found')
+  })
+
+  it('throws with statusText when the error body is not JSON', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('not json', { status: 500, statusText: 'Internal Server Error' }),
+    )
+    await expect(getBlob('/application/missing')).rejects.toThrow('Internal Server Error')
+  })
+
+  it('forwards the AbortSignal to fetch when provided', async () => {
+    fetchMock.mockResolvedValue(new Response(new Blob(['%PDF']), { status: 200 }))
+    const controller = new AbortController()
+    await getBlob('/application/linkedin:1001', controller.signal)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3000/application/linkedin:1001',
+      expect.objectContaining({ signal: controller.signal }),
+    )
   })
 })
 

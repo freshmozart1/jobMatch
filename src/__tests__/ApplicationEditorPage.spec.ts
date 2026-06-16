@@ -303,6 +303,185 @@ describe('ApplicationEditorPage', () => {
     expect(urls.some((u) => u.includes('/cv/upload'))).toBe(false)
   })
 
+  // --- download application ---
+
+  describe('download application', () => {
+    function makeDownloadMocks() {
+      const createObjectURL = vi.fn(() => 'blob:fake')
+      const revokeObjectURL = vi.fn()
+      vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+      const anchorClick = vi.fn()
+      let capturedAnchor: HTMLAnchorElement | null = null
+      const originalCreate = document.createElement.bind(document)
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'a') {
+          const a = originalCreate('a')
+          a.click = anchorClick
+          capturedAnchor = a
+          return a
+        }
+        return originalCreate(tag)
+      })
+      return {
+        createObjectURL,
+        revokeObjectURL,
+        anchorClick,
+        getAnchor: () => capturedAnchor,
+        restore: () => { vi.restoreAllMocks(); vi.unstubAllGlobals() },
+      }
+    }
+
+    it('calls GET /application/:duplicateKey when download button is clicked', async () => {
+      const { anchorClick, revokeObjectURL, getAnchor, restore } = makeDownloadMocks()
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+
+      const urls = getCalledUrls()
+      expect(urls.some((u) => u.includes('/application/linkedin:1001'))).toBe(true)
+      expect(anchorClick).toHaveBeenCalled()
+      expect(getAnchor()?.download).toBe('application-linkedin-1001.pdf')
+
+      await vi.runAllTimersAsync()
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake')
+
+      restore()
+    })
+
+    it('passes an AbortSignal to the fetch call', async () => {
+      const { restore } = makeDownloadMocks()
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+
+      const downloadCall = fetchMock.mock.calls.find((c: unknown[]) =>
+        (c[0] as string).includes('/application/'),
+      )
+      expect(downloadCall).toBeDefined()
+      expect((downloadCall![1] as RequestInit).signal).toBeInstanceOf(AbortSignal)
+
+      restore()
+    })
+
+    it('ignores a second click while a download is already in progress', async () => {
+      const { anchorClick, restore } = makeDownloadMocks()
+
+      let resolveFirst!: () => void
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementationOnce(
+          () => new Promise<Response>((res) => { resolveFirst = () => res(new Response(new Blob(['%PDF']), { status: 200 })) }),
+        ) // first download — held pending
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      // first click — download starts but fetch is still pending
+      wrapper.find('.cl-download').trigger('click')
+      // second click — should be ignored
+      await wrapper.find('.cl-download').trigger('click')
+
+      resolveFirst()
+      await flushPromises()
+
+      // fetch should have been called exactly once for the download endpoint
+      const downloadCalls = fetchMock.mock.calls.filter((c: unknown[]) =>
+        (c[0] as string).includes('/application/'),
+      )
+      expect(downloadCalls).toHaveLength(1)
+      expect(anchorClick).toHaveBeenCalledTimes(1)
+
+      restore()
+    })
+
+    it('revokes the blob URL via onBeforeUnmount when the component unmounts before the timer fires', async () => {
+      const { revokeObjectURL, restore } = makeDownloadMocks()
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+      // do NOT run timers — simulate unmount before the setTimeout fires
+      wrapper.unmount()
+
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake')
+
+      restore()
+    })
+
+    it('aborts the in-flight fetch when the component unmounts', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      let rejectFetch!: (reason: unknown) => void
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementationOnce(
+          () => new Promise<Response>((_, rej) => { rejectFetch = rej }),
+        )
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      wrapper.find('.cl-download').trigger('click')
+      // unmount before the fetch resolves — should abort
+      wrapper.unmount()
+
+      // simulate the aborted fetch rejecting with DOMException
+      rejectFetch(new DOMException('Aborted', 'AbortError'))
+      await flushPromises()
+
+      // AbortError must be suppressed — no console.error for download
+      expect(consoleError).not.toHaveBeenCalledWith(
+        'Failed to download application:',
+        expect.anything(),
+      )
+
+      consoleError.mockRestore()
+    })
+
+    it('logs to console.error when the download request fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(JSON.stringify({ error: 'Cover letter not found' }), { status: 404 }),
+          ),
+        )
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to download application:',
+        'Cover letter not found',
+      )
+      consoleError.mockRestore()
+    })
+  })
+
   // --- lifecycle ---
 
   it('flushes a pending upload when the component is unmounted', async () => {
