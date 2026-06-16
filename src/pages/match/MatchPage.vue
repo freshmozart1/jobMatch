@@ -94,6 +94,7 @@ const MAX_SCRAPE_CONCURRENCY = 2
 let scrapeInFlight = 0
 let scrapeGeneration = 0
 const scrapeQueue: Array<() => void> = []
+let scrapeAbortController: AbortController | null = null
 
 function drainSimilarityQueue(): void {
   while (similarityInFlight < MAX_SIMILARITY_CONCURRENCY && similarityQueue.length > 0) {
@@ -135,7 +136,7 @@ async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
   }
 }
 
-async function scrapeJobPage(url: string): Promise<void> {
+async function scrapeJobPage(url: string, signal: AbortSignal): Promise<void> {
   const generation = scrapeGeneration
   await new Promise<void>((resolve) => {
     scrapeQueue.push(resolve)
@@ -143,11 +144,14 @@ async function scrapeJobPage(url: string): Promise<void> {
   })
   if (generation !== scrapeGeneration) return
   try {
-    const scrapedJob = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
-    jobs.value.push(scrapedJob)
-    void fetchCosineSimilarity(jobs.value.at(-1)!)
+    const scrapedJob = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url }, signal)
+    if (generation !== scrapeGeneration) return
+    const pushedIndex = jobs.value.push(scrapedJob) - 1
+    void fetchCosineSimilarity(jobs.value[pushedIndex]!)
   } catch {
-    failedJobPageUrls.value.push(url)
+    if (generation === scrapeGeneration) {
+      failedJobPageUrls.value.push(url)
+    }
   } finally {
     if (generation === scrapeGeneration) {
       scrapeInFlight--
@@ -160,6 +164,8 @@ async function fetchJobs(): Promise<void> {
   similarityGeneration++
   for (const resolve of similarityQueue.splice(0)) resolve()
   similarityInFlight = 0
+  scrapeAbortController?.abort()
+  scrapeAbortController = new AbortController()
   scrapeGeneration++
   for (const resolve of scrapeQueue.splice(0)) resolve()
   scrapeInFlight = 0
@@ -182,7 +188,7 @@ async function fetchJobs(): Promise<void> {
       jobLinksByKeyword,
     )
     const urls = [...new Set(Object.values(filteredJobLinksByKeyword).flat())]
-    await Promise.all(urls.map((url) => scrapeJobPage(url)))
+    await Promise.all(urls.map((url) => scrapeJobPage(url, scrapeAbortController!.signal)))
   } catch (error) {
     jobs.value = []
     errorMessage.value = error instanceof Error ? error.message : 'Failed to fetch jobs.'
