@@ -105,6 +105,16 @@ describe('getBlob', () => {
     )
     await expect(getBlob('/application/missing')).rejects.toThrow('Internal Server Error')
   })
+
+  it('forwards the AbortSignal to fetch when provided', async () => {
+    fetchMock.mockResolvedValue(new Response(new Blob(['%PDF']), { status: 200 }))
+    const controller = new AbortController()
+    await getBlob('/application/linkedin:1001', controller.signal)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3000/application/linkedin:1001',
+      expect.objectContaining({ signal: controller.signal }),
+    )
+  })
 })
 
 describe('postJson', () => {

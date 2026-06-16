@@ -1,33 +1,30 @@
 const API_BASE_URL =
   import.meta.env.VITE_JOB_MATCH_SERVER_URL ?? `http://${window.location.hostname}:3000`
 
-export async function getJson<ResponseBody>(path: string): Promise<ResponseBody> {
-  const response = await fetch(`${API_BASE_URL}${path}`)
+async function fetchWithErrorCheck(path: string, init?: RequestInit): Promise<Response> {
+  const response = init !== undefined
+    ? await fetch(`${API_BASE_URL}${path}`, init)
+    : await fetch(`${API_BASE_URL}${path}`)
   if (!response.ok) {
     throw new Error(await getResponseErrorMessage(response))
   }
+  return response
+}
+
+export async function getJson<ResponseBody>(path: string): Promise<ResponseBody> {
+  const response = await fetchWithErrorCheck(path)
   const text = await response.text()
   return (text ? JSON.parse(text) : undefined) as ResponseBody
 }
 
 export async function postFormData<ResponseBody>(path: string, formData: FormData): Promise<ResponseBody> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST',
-    body: formData,
-  })
-  if (!response.ok) {
-    throw new Error(await getResponseErrorMessage(response))
-  }
+  const response = await fetchWithErrorCheck(path, { method: 'POST', body: formData })
   const text = await response.text()
   return (text ? JSON.parse(text) : undefined) as ResponseBody
 }
 
-export async function getBlob(path: string): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}${path}`)
-  if (!response.ok) {
-    throw new Error(await getResponseErrorMessage(response))
-  }
-  return response.blob()
+export async function getBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  return (await fetchWithErrorCheck(path, signal !== undefined ? { signal } : undefined)).blob()
 }
 
 export async function postJson<ResponseBody>(
@@ -35,7 +32,7 @@ export async function postJson<ResponseBody>(
   body: unknown,
   signal?: AbortSignal,
 ): Promise<ResponseBody> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithErrorCheck(path, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -43,11 +40,6 @@ export async function postJson<ResponseBody>(
     body: JSON.stringify(body),
     signal,
   })
-
-  if (!response.ok) {
-    throw new Error(await getResponseErrorMessage(response))
-  }
-
   return response.json() as Promise<ResponseBody>
 }
 
