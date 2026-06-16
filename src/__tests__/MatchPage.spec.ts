@@ -219,11 +219,12 @@ describe('MatchPage', () => {
       expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
     })
 
-    // Trigger a second fetchJobs via the searchOpen watcher:
-    // emit 'search' from MatchFilterBar → searchOpen = true
+    // Trigger a second fetchJobs via the searchOpen watcher.
+    // Change keywords so searchParamsChanged() returns true and the watcher fires fetchJobs().
     wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search')
     await wrapper.vm.$nextTick()
-    // emit 'back' from SearchPage → searchOpen = false → watch fires → fetchJobs() called
+    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('update:keywords', ['Backend Developer'])
+    await wrapper.vm.$nextTick()
     wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back')
 
     // Wait for the second job-links call to confirm the new search is running.
@@ -263,6 +264,114 @@ describe('MatchPage', () => {
     for (const [, init] of jobPageCalls) {
       expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal)
     }
+  })
+
+  it('does not scrape stale job-links results when a new search supersedes the first', async () => {
+    const staleJobLinksDeferred = createDeferred<Response>()
+    let jobLinksCallCount = 0
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = input.toString()
+        const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
+
+        if (url.endsWith('/scrape/linkedin/job-links')) {
+          jobLinksCallCount++
+          if (jobLinksCallCount === 1) return staleJobLinksDeferred.promise
+          return createJsonResponse(jobLinksByKeyword)
+        }
+        if (url.endsWith('/jobs/filter-job-links')) {
+          return createJsonResponse(requestBody)
+        }
+        if (url.endsWith('/scrape/linkedin/job-page')) {
+          const job = testJobs.find((j) => j.sourceUrl === (requestBody?.url as string))
+          return createJsonResponse(job ?? { error: 'Unknown' })
+        }
+        if (url.endsWith('/jobs/liked-average-similarity')) {
+          return createJsonResponse({ similarity: null })
+        }
+        return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
+      }),
+    )
+
+    const wrapper = mount(MatchPage)
+
+    // First fetchJobs is hanging at job-links. Trigger a second search by changing keywords.
+    wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search')
+    await wrapper.vm.$nextTick()
+    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('update:keywords', ['Backend Developer'])
+    await wrapper.vm.$nextTick()
+    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back')
+
+    // Wait for the second job-links call to confirm the new search is running.
+    await vi.waitFor(() => {
+      expect(jobLinksCallCount).toBe(2)
+    })
+
+    // Wait for the second search's jobs to appear.
+    await vi.waitFor(() => {
+      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
+    })
+
+    // Resolve the stale first-search job-links — fetchJobs generation guard must discard it.
+    staleJobLinksDeferred.resolve(createJsonResponse(jobLinksByKeyword))
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    // Swipe through all cards: count must be testJobs.length, not testJobs.length * 2.
+    let swipeCount = 0
+    while (wrapper.find('.job-card-stack__current').exists() && swipeCount < testJobs.length + 2) {
+      swipeTopCard(wrapper)
+      await wrapper.vm.$nextTick()
+      swipeCount++
+    }
+    expect(swipeCount).toBe(testJobs.length)
+  })
+
+  it('does not re-fetch jobs when the search panel is closed without changing any parameters', async () => {
+    const fetchMock = mockFetchPipeline()
+
+    const wrapper = await mountLoadedMatchPage()
+
+    const jobLinksCallsBefore = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/job-links'),
+    ).length
+
+    // Open and immediately close the search panel without modifying keywords, city, or distance.
+    wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search')
+    await wrapper.vm.$nextTick()
+    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back')
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    const jobLinksCallsAfter = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/job-links'),
+    ).length
+
+    expect(jobLinksCallsAfter).toBe(jobLinksCallsBefore)
+  })
+
+  it('passes an AbortSignal to liked-average-similarity requests', async () => {
+    const fetchMock = mockFetchPipeline()
+
+    const wrapper = await mountLoadedMatchPage()
+
+    await vi.waitFor(() => {
+      const similarityCalls = fetchMock.mock.calls.filter((args) =>
+        args[0]!.toString().endsWith('/jobs/liked-average-similarity'),
+      )
+      expect(similarityCalls.length).toBeGreaterThan(0)
+    })
+
+    const similarityCalls = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/jobs/liked-average-similarity'),
+    )
+    for (const [, init] of similarityCalls) {
+      expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal)
+    }
+
+    await wrapper.unmount()
   })
 
   it('limits concurrent job page scrape requests to 2 at a time', async () => {

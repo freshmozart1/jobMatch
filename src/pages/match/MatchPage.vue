@@ -89,12 +89,26 @@ const MAX_SIMILARITY_CONCURRENCY = 2
 let similarityInFlight = 0
 let similarityGeneration = 0
 const similarityQueue: Array<() => void> = []
+let similarityAbortController: AbortController | null = null
 
 const MAX_SCRAPE_CONCURRENCY = 2
 let scrapeInFlight = 0
 let scrapeGeneration = 0
 const scrapeQueue: Array<() => void> = []
 let scrapeAbortController: AbortController | null = null
+
+let lastFetchedParams: { keywords: string[]; city: string; distance: number } | null = null
+
+function searchParamsChanged(): boolean {
+  const cur = { keywords: keywords.value, city: getCity(), distance: getDistance() }
+  if (!lastFetchedParams) return true
+  return (
+    cur.city !== lastFetchedParams.city ||
+    cur.distance !== lastFetchedParams.distance ||
+    cur.keywords.length !== lastFetchedParams.keywords.length ||
+    cur.keywords.some((k, i) => k !== lastFetchedParams!.keywords[i])
+  )
+}
 
 function drainSimilarityQueue(): void {
   while (similarityInFlight < MAX_SIMILARITY_CONCURRENCY && similarityQueue.length > 0) {
@@ -113,6 +127,7 @@ function drainScrapeQueue(): void {
 async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
   if (!job.embedding?.length) return
   const generation = similarityGeneration
+  const signal = similarityAbortController?.signal
   await new Promise<void>((resolve) => {
     similarityQueue.push(resolve)
     drainSimilarityQueue()
@@ -122,6 +137,7 @@ async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
     const result = await postJson<{ similarity: number | null }>(
       '/jobs/liked-average-similarity',
       job.embedding,
+      signal,
     )
     if (typeof result.similarity === 'number') {
       job.cosineSimilarity = result.similarity
@@ -145,6 +161,8 @@ async function scrapeJobPage(url: string, signal: AbortSignal): Promise<void> {
   if (generation !== scrapeGeneration) return
   try {
     const scrapedJob = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url }, signal)
+    // Stale result from a superseded search — discard silently; belongs to neither the old
+    // (already reset) nor the new search's jobs/failures.
     if (generation !== scrapeGeneration) return
     const pushedIndex = jobs.value.push(scrapedJob) - 1
     void fetchCosineSimilarity(jobs.value[pushedIndex]!)
@@ -161,6 +179,9 @@ async function scrapeJobPage(url: string, signal: AbortSignal): Promise<void> {
 }
 
 async function fetchJobs(): Promise<void> {
+  lastFetchedParams = { keywords: [...keywords.value], city: getCity(), distance: getDistance() }
+  similarityAbortController?.abort()
+  similarityAbortController = new AbortController()
   similarityGeneration++
   for (const resolve of similarityQueue.splice(0)) resolve()
   similarityInFlight = 0
@@ -169,6 +190,10 @@ async function fetchJobs(): Promise<void> {
   scrapeGeneration++
   for (const resolve of scrapeQueue.splice(0)) resolve()
   scrapeInFlight = 0
+  // Capture local snapshots before the first await so a concurrent fetchJobs() call cannot
+  // overwrite scrapeAbortController or scrapeGeneration and corrupt this call's state.
+  const myGeneration = scrapeGeneration
+  const signal = scrapeAbortController.signal
   isLoading.value = true
   jobs.value = []
   errorMessage.value = null
@@ -182,18 +207,26 @@ async function fetchJobs(): Promise<void> {
         location: getCity(),
         distance: getDistance(),
       },
+      signal,
     )
+    if (scrapeGeneration !== myGeneration) return
     const filteredJobLinksByKeyword = await postJson<LinkedInJobLinksByKeyword>(
       '/jobs/filter-job-links',
       jobLinksByKeyword,
+      signal,
     )
+    if (scrapeGeneration !== myGeneration) return
     const urls = [...new Set(Object.values(filteredJobLinksByKeyword).flat())]
-    await Promise.all(urls.map((url) => scrapeJobPage(url, scrapeAbortController!.signal)))
+    await Promise.all(urls.map((url) => scrapeJobPage(url, signal)))
   } catch (error) {
-    jobs.value = []
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to fetch jobs.'
+    if (scrapeGeneration === myGeneration) {
+      jobs.value = []
+      errorMessage.value = error instanceof Error ? error.message : 'Failed to fetch jobs.'
+    }
   } finally {
-    isLoading.value = false
+    if (scrapeGeneration === myGeneration) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -202,7 +235,7 @@ onMounted(() => {
 })
 
 watch(searchOpen, (open) => {
-  if (!open && keywords.value.length > 0) void fetchJobs()
+  if (!open && keywords.value.length > 0 && searchParamsChanged()) void fetchJobs()
 })
 </script>
 
