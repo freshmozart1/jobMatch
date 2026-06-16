@@ -87,6 +87,7 @@ async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
 
 const MAX_SIMILARITY_CONCURRENCY = 2
 let similarityInFlight = 0
+let similarityGeneration = 0
 const similarityQueue: Array<() => void> = []
 
 function drainSimilarityQueue(): void {
@@ -98,10 +99,12 @@ function drainSimilarityQueue(): void {
 
 async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
   if (!job.embedding?.length) return
+  const generation = similarityGeneration
   await new Promise<void>((resolve) => {
     similarityQueue.push(resolve)
     drainSimilarityQueue()
   })
+  if (generation !== similarityGeneration) return
   try {
     const result = await postJson<{ similarity: number | null }>(
       '/jobs/liked-average-similarity',
@@ -113,13 +116,16 @@ async function fetchCosineSimilarity(job: ScrapedJob): Promise<void> {
   } catch {
     // similarity is optional; silently ignore errors
   } finally {
-    similarityInFlight--
-    drainSimilarityQueue()
+    if (generation === similarityGeneration) {
+      similarityInFlight--
+      drainSimilarityQueue()
+    }
   }
 }
 
 async function fetchJobs(): Promise<void> {
-  similarityQueue.length = 0
+  similarityGeneration++
+  for (const resolve of similarityQueue.splice(0)) resolve()
   similarityInFlight = 0
   isLoading.value = true
   jobs.value = []
@@ -142,7 +148,8 @@ async function fetchJobs(): Promise<void> {
     await Promise.all(
       [...new Set(Object.values(filteredJobLinksByKeyword).flat())].map(async (url) => {
         try {
-          jobs.value.push(await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url }))
+          const scrapedJob = await postJson<ScrapedJob>('/scrape/linkedin/job-page', { url })
+          jobs.value.push(scrapedJob)
           void fetchCosineSimilarity(jobs.value.at(-1)!)
         } catch {
           failedJobPageUrls.value.push(url)
