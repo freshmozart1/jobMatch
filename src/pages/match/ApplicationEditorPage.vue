@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
-import { getJson, postFormData, postJson } from '@/lib/api'
+import { getBlob, getJson, postFormData, postJson } from '@/lib/api'
 import { CoverLetterEditor } from '@/components/coverLetter'
 import { ApplicationEditorHeader, ApplicationEditorMenu } from '@/components/application'
 
@@ -185,6 +185,20 @@ async function onCvFileSelected(file: File) {
   }
 }
 
+async function downloadApplication() {
+  try {
+    const blob = await getBlob('/application/' + props.job.duplicateKey)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'application.pdf'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Failed to download application:', error instanceof Error ? error.message : error)
+  }
+}
+
 onBeforeUnmount(() => {
   if (uploadTimer !== null) {
     void uploadNow()
@@ -225,6 +239,7 @@ const statusLabel = computed(() => {
       :cv-uploaded="cvUploaded"
       @open-letter="view = 'letter'"
       @file-selected="onCvFileSelected"
+      @download="downloadApplication"
     />
 
     <!-- Cover letter editor -->

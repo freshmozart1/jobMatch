@@ -303,6 +303,64 @@ describe('ApplicationEditorPage', () => {
     expect(urls.some((u) => u.includes('/cv/upload'))).toBe(false)
   })
 
+  // --- download application ---
+
+  describe('download application', () => {
+    it('calls GET /application/:duplicateKey when download button is clicked', async () => {
+      vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:fake'), revokeObjectURL: vi.fn() })
+      const anchorClick = vi.fn()
+      const originalCreate = document.createElement.bind(document)
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'a') {
+          const a = originalCreate('a')
+          a.click = anchorClick
+          return a
+        }
+        return originalCreate(tag)
+      })
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+
+      const urls = getCalledUrls()
+      expect(urls.some((u) => u.includes('/application/linkedin:1001'))).toBe(true)
+      expect(anchorClick).toHaveBeenCalled()
+
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    })
+
+    it('logs to console.error when the download request fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(JSON.stringify({ error: 'Cover letter not found' }), { status: 404 }),
+          ),
+        )
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to download application:',
+        'Cover letter not found',
+      )
+      consoleError.mockRestore()
+    })
+  })
+
   // --- lifecycle ---
 
   it('flushes a pending upload when the component is unmounted', async () => {

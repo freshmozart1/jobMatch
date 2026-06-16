@@ -22,6 +22,14 @@ export async function postFormData<ResponseBody>(path: string, formData: FormDat
   return (text ? JSON.parse(text) : undefined) as ResponseBody
 }
 
+export async function getBlob(path: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}${path}`)
+  if (!response.ok) {
+    throw new Error(await getResponseErrorMessage(response))
+  }
+  return response.blob()
+}
+
 export async function postJson<ResponseBody>(
   path: string,
   body: unknown,

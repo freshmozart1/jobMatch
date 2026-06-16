@@ -3,7 +3,7 @@ import { CoverLetterAction } from '@/components/coverLetter'
 import CvFileInput from '@/components/CvFileInput.vue'
 
 defineProps<{ letterDone: boolean; cvUploaded: boolean }>()
-defineEmits<{ openLetter: []; fileSelected: [file: File] }>()
+defineEmits<{ openLetter: []; fileSelected: [file: File]; download: [] }>()
 </script>
 
 <template>
@@ -16,9 +16,7 @@ defineEmits<{ openLetter: []; fileSelected: [file: File] }>()
 
     <CvFileInput :uploaded="cvUploaded" @fileSelected="$emit('fileSelected', $event)" />
 
-    <!-- TODO: backend — implement application download endpoint
-         (e.g. GET /jobs/{duplicateKey}/application.pdf) and wire it to this button -->
-    <button type="button" class="cl-download" :disabled="!cvUploaded">Download application</button>
+    <button type="button" class="cl-download" :disabled="!cvUploaded" @click="$emit('download')">Download application</button>
   </div>
 </template>
 
