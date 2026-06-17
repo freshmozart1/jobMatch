@@ -12,7 +12,6 @@ const job2: ScrapedJob = {
   location: 'Berlin',
   scrapedAt: '2026-06-08T10:00:00.000Z',
   duplicateKey: 'linkedin:2002',
-  embedding: [0.5, 0.5],
 }
 
 const job: ScrapedJob = {
@@ -25,7 +24,6 @@ const job: ScrapedJob = {
   descriptionText: '**Requirements**: 3 years experience.',
   scrapedAt: '2026-06-08T10:00:00.000Z',
   duplicateKey: 'linkedin:1001',
-  embedding: [0.9, 0.1],
 }
 
 describe('ApplicationEditorPage', () => {

@@ -1,5 +1,3 @@
-export type TextEmbedding = number[]
-
 export type ScrapedJob = {
   sourceHostname: string
   sourceJobId?: string
@@ -12,6 +10,5 @@ export type ScrapedJob = {
   scrapedAt: string
   tags?: string[]
   duplicateKey: string
-  embedding: TextEmbedding
   cosineSimilarity?: number
 }

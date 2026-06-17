@@ -16,7 +16,6 @@ type JobCardProps = {
     scrapedAt: string
     tags?: string[]
     duplicateKey: string
-    embedding: number[]
     cosineSimilarity?: number
   }
 }
@@ -34,7 +33,6 @@ function createJob(overrides: Partial<JobCardProps['job']> = {}): JobCardProps['
     scrapedAt: '2026-06-02T14:42:54.764Z',
     tags: ['Berufseinstieg', 'Vollzeit', 'Ingenieurwesen und IT', 'Einzelhandel'],
     duplicateKey: 'linkedin:4422110097',
-    embedding: [0.1, 0.2, 0.3],
     ...overrides,
   }
 }
