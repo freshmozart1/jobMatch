@@ -46,6 +46,7 @@ describe('CoverLetterEditor', () => {
     it('handles multiple bold segments', () => {
       const wrapper = mountEditor({ descriptionText: '**A** and **B**' })
       const strongs = wrapper.findAll('.cl-paper__jobdesc strong')
+      // fallow-ignore-next-line code-duplication
       expect(strongs).toHaveLength(2)
       expect(strongs[0].text()).toBe('A')
       expect(strongs[1].text()).toBe('B')

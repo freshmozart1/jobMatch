@@ -36,6 +36,7 @@ describe('JobCardDescription', () => {
     it('handles multiple bold segments', () => {
       const wrapper = mount(JobCardDescription, { props: { descriptionText: '**A** and **B**' } })
       const strongs = wrapper.findAll('.job-card__description strong')
+      // fallow-ignore-next-line code-duplication
       expect(strongs).toHaveLength(2)
       expect(strongs[0].text()).toBe('A')
       expect(strongs[1].text()).toBe('B')
