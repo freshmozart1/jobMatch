@@ -58,13 +58,14 @@ function createDeferred<T>() {
 
 function buildFetchMock(
   jobPageHandler: (jobUrl: string) => Promise<Response>,
+  jobLinksHandler?: () => Promise<Response>,
 ) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input.toString()
     const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
 
     if (url.endsWith('/scrape/linkedin/job-links')) {
-      return createJsonResponse(jobLinksByKeyword)
+      return jobLinksHandler ? jobLinksHandler() : createJsonResponse(jobLinksByKeyword)
     }
     if (url.endsWith('/jobs/filter-job-links')) {
       return createJsonResponse(requestBody)
@@ -115,6 +116,33 @@ function dragCurrentCard(wrapper: ReturnType<typeof mount>, clientX: number) {
 function expectTopCardStillFirst(wrapper: ReturnType<typeof mount>) {
   expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
     title: testJobs[0]!.title,
+  })
+}
+
+async function triggerSearchUpdate(wrapper: ReturnType<typeof mount>, keywords: string[]) {
+  wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search')
+  await wrapper.vm.$nextTick()
+  wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('update:keywords', keywords)
+  await wrapper.vm.$nextTick()
+  wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back')
+}
+
+async function swipeAllCards(wrapper: ReturnType<typeof mount>, expectedCount: number) {
+  let swipeCount = 0
+  while (wrapper.find('.job-card-stack__current').exists() && swipeCount < expectedCount + 2) {
+    swipeTopCard(wrapper)
+    await wrapper.vm.$nextTick()
+    swipeCount++
+  }
+  expect(swipeCount).toBe(expectedCount)
+}
+
+async function waitForJobPageCallCount(fetchMock: ReturnType<typeof vi.fn>, n: number) {
+  await vi.waitFor(() => {
+    const jobPageCalls = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/job-page'),
+    )
+    expect(jobPageCalls).toHaveLength(n)
   })
 }
 
@@ -176,27 +204,20 @@ describe('MatchPage', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input.toString()
-        const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
-
-        if (url.endsWith('/scrape/linkedin/job-links')) {
-          jobLinksCallCount++
-          return createJsonResponse(jobLinksByKeyword)
-        }
-        if (url.endsWith('/jobs/filter-job-links')) {
-          return createJsonResponse(requestBody)
-        }
-        if (url.endsWith('/scrape/linkedin/job-page')) {
+      buildFetchMock(
+        async (jobUrl) => {
           // Only defer job1 during the first search; resolve it immediately for the second.
-          if (requestBody?.url === testJobs[0]!.sourceUrl && jobLinksCallCount === 1) {
+          if (jobUrl === testJobs[0]!.sourceUrl && jobLinksCallCount === 1) {
             return staleJobDeferred.promise
           }
-          const job = testJobs.find((j) => j.sourceUrl === (requestBody?.url as string))
+          const job = testJobs.find((j) => j.sourceUrl === jobUrl)
           return createJsonResponse(job ?? { error: 'Unknown' })
-        }
-        return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
-      }),
+        },
+        async () => {
+          jobLinksCallCount++
+          return createJsonResponse(jobLinksByKeyword)
+        },
+      ),
     )
 
     const wrapper = mount(MatchPage)
@@ -208,11 +229,7 @@ describe('MatchPage', () => {
 
     // Trigger a second fetchJobs via the searchOpen watcher.
     // Change keywords so searchParamsChanged() returns true and the watcher fires fetchJobs().
-    wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search')
-    await wrapper.vm.$nextTick()
-    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('update:keywords', ['Backend Developer'])
-    await wrapper.vm.$nextTick()
-    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back')
+    await triggerSearchUpdate(wrapper, ['Backend Developer'])
 
     // Wait for the second job-links call to confirm the new search is running.
     await vi.waitFor(() => {
@@ -230,13 +247,7 @@ describe('MatchPage', () => {
     await wrapper.vm.$nextTick()
 
     // Swipe through all cards: count must be testJobs.length, not testJobs.length + 1.
-    let swipeCount = 0
-    while (wrapper.find('.job-card-stack__current').exists() && swipeCount < testJobs.length + 2) {
-      swipeTopCard(wrapper)
-      await wrapper.vm.$nextTick()
-      swipeCount++
-    }
-    expect(swipeCount).toBe(testJobs.length)
+    await swipeAllCards(wrapper, testJobs.length)
   })
 
   it('passes an AbortSignal to job-page scrape requests', async () => {
@@ -259,34 +270,23 @@ describe('MatchPage', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input.toString()
-        const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
-
-        if (url.endsWith('/scrape/linkedin/job-links')) {
+      buildFetchMock(
+        async (jobUrl) => {
+          const job = testJobs.find((j) => j.sourceUrl === jobUrl)
+          return createJsonResponse(job ?? { error: 'Unknown' })
+        },
+        async () => {
           jobLinksCallCount++
           if (jobLinksCallCount === 1) return staleJobLinksDeferred.promise
           return createJsonResponse(jobLinksByKeyword)
-        }
-        if (url.endsWith('/jobs/filter-job-links')) {
-          return createJsonResponse(requestBody)
-        }
-        if (url.endsWith('/scrape/linkedin/job-page')) {
-          const job = testJobs.find((j) => j.sourceUrl === (requestBody?.url as string))
-          return createJsonResponse(job ?? { error: 'Unknown' })
-        }
-        return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
-      }),
+        },
+      ),
     )
 
     const wrapper = mount(MatchPage)
 
     // First fetchJobs is hanging at job-links. Trigger a second search by changing keywords.
-    wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search')
-    await wrapper.vm.$nextTick()
-    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('update:keywords', ['Backend Developer'])
-    await wrapper.vm.$nextTick()
-    wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back')
+    await triggerSearchUpdate(wrapper, ['Backend Developer'])
 
     // Wait for the second job-links call to confirm the new search is running.
     await vi.waitFor(() => {
@@ -304,13 +304,7 @@ describe('MatchPage', () => {
     await wrapper.vm.$nextTick()
 
     // Swipe through all cards: count must be testJobs.length, not testJobs.length * 2.
-    let swipeCount = 0
-    while (wrapper.find('.job-card-stack__current').exists() && swipeCount < testJobs.length + 2) {
-      swipeTopCard(wrapper)
-      await wrapper.vm.$nextTick()
-      swipeCount++
-    }
-    expect(swipeCount).toBe(testJobs.length)
+    await swipeAllCards(wrapper, testJobs.length)
   })
 
   it('does not re-fetch jobs when the search panel is closed without changing any parameters', async () => {
@@ -360,34 +354,20 @@ describe('MatchPage', () => {
       'Full Stack Engineer': allThreeJobs.map((job) => job.sourceUrl),
     }
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = input.toString()
-      const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
-
-      if (url.endsWith('/scrape/linkedin/job-links')) {
-        return createJsonResponse(jobLinksByKeywordWithThree)
-      }
-      if (url.endsWith('/jobs/filter-job-links')) {
-        return createJsonResponse(requestBody)
-      }
-      if (url.endsWith('/scrape/linkedin/job-page')) {
-        const deferred = deferredResponses.get(requestBody?.url as string)
+    const fetchMock = buildFetchMock(
+      async (jobUrl) => {
+        const deferred = deferredResponses.get(jobUrl)
         if (!deferred) return createJsonResponse({ error: 'Unknown URL' }, { status: 404 })
         return deferred.promise
-      }
-      return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
-    })
+      },
+      async () => createJsonResponse(jobLinksByKeywordWithThree),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     mount(MatchPage)
 
     // Wait until exactly 2 job-page scrape requests are in-flight (+ 2 pipeline calls = 4 total).
-    await vi.waitFor(() => {
-      const jobPageCalls = fetchMock.mock.calls.filter((args) =>
-        args[0]!.toString().endsWith('/scrape/linkedin/job-page'),
-      )
-      expect(jobPageCalls).toHaveLength(2)
-    })
+    await waitForJobPageCallCount(fetchMock, 2)
 
     // The third URL must NOT have been requested yet.
     const jobPageUrls = fetchMock.mock.calls
@@ -397,12 +377,7 @@ describe('MatchPage', () => {
 
     // Resolve the first — the third must now start.
     deferredResponses.get(testJobs[0]!.sourceUrl)!.resolve(createJsonResponse(testJobs[0]))
-    await vi.waitFor(() => {
-      const jobPageCalls = fetchMock.mock.calls.filter((args) =>
-        args[0]!.toString().endsWith('/scrape/linkedin/job-page'),
-      )
-      expect(jobPageCalls).toHaveLength(3)
-    })
+    await waitForJobPageCallCount(fetchMock, 3)
 
     // Clean up remaining deferred promises.
     deferredResponses.get(testJobs[1]!.sourceUrl)!.resolve(createJsonResponse(testJobs[1]))

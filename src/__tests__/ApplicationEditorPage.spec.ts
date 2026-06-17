@@ -233,12 +233,18 @@ describe('ApplicationEditorPage', () => {
     await flushPromises()
   }
 
-  it('sends FormData with file and jobDuplicateKey to POST /cv/upload on file selection', async () => {
+  async function mountAndUploadCvFile() {
     const wrapper = mount(ApplicationEditorPage, { props: { job } })
     await flushPromises()
     fetchMock.mockClear()
     const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
     await selectCvFile(wrapper, file)
+    const urls = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    return { wrapper, file, urls }
+  }
+
+  it('sends FormData with file and jobDuplicateKey to POST /cv/upload on file selection', async () => {
+    const { file } = await mountAndUploadCvFile()
     const cvUploadCall = fetchMock.mock.calls.find((c: unknown[]) =>
       (c[0] as string).includes('/cv/upload'),
     )
@@ -274,12 +280,7 @@ describe('ApplicationEditorPage', () => {
   })
 
   it('calls /jobs/create before /cv/upload when a file is selected', async () => {
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await flushPromises()
-    fetchMock.mockClear()
-    const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
-    await selectCvFile(wrapper, file)
-    const urls = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const { urls } = await mountAndUploadCvFile()
     const jobsCreateIndex = urls.findIndex((u) => u.includes('/jobs/create'))
     const cvUploadIndex = urls.findIndex((u) => u.includes('/cv/upload'))
     expect(jobsCreateIndex).toBeGreaterThanOrEqual(0)
@@ -292,12 +293,7 @@ describe('ApplicationEditorPage', () => {
       .mockResolvedValue(
         new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
       ) // /jobs/create fails
-    const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await flushPromises()
-    fetchMock.mockClear()
-    const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
-    await selectCvFile(wrapper, file)
-    const urls = fetchMock.mock.calls.map((c: unknown[]) => c[0] as string)
+    const { urls } = await mountAndUploadCvFile()
     expect(urls.some((u) => u.includes('/cv/upload'))).toBe(false)
   })
 
@@ -329,18 +325,21 @@ describe('ApplicationEditorPage', () => {
       }
     }
 
-    it('calls GET /application/:duplicateKey when download button is clicked', async () => {
-      const { anchorClick, revokeObjectURL, getAnchor, restore } = makeDownloadMocks()
-
+    async function mountAndClickDownload() {
+      const mocks = makeDownloadMocks()
       const wrapper = mount(ApplicationEditorPage, { props: { job } })
       await flushPromises()
       fetchMock.mockClear()
       fetchMock.mockImplementation(() =>
         Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
       )
-
       await wrapper.find('.cl-download').trigger('click')
       await flushPromises()
+      return { wrapper, ...mocks }
+    }
+
+    it('calls GET /application/:duplicateKey when download button is clicked', async () => {
+      const { anchorClick, revokeObjectURL, getAnchor, restore } = await mountAndClickDownload()
 
       const urls = getCalledUrls()
       expect(urls.some((u) => u.includes('/application/linkedin:1001'))).toBe(true)
@@ -354,17 +353,7 @@ describe('ApplicationEditorPage', () => {
     })
 
     it('passes an AbortSignal to the fetch call', async () => {
-      const { restore } = makeDownloadMocks()
-
-      const wrapper = mount(ApplicationEditorPage, { props: { job } })
-      await flushPromises()
-      fetchMock.mockClear()
-      fetchMock.mockImplementation(() =>
-        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
-      )
-
-      await wrapper.find('.cl-download').trigger('click')
-      await flushPromises()
+      const { restore } = await mountAndClickDownload()
 
       const downloadCall = fetchMock.mock.calls.find((c: unknown[]) =>
         (c[0] as string).includes('/application/'),
@@ -407,17 +396,7 @@ describe('ApplicationEditorPage', () => {
     })
 
     it('revokes the blob URL via onBeforeUnmount when the component unmounts before the timer fires', async () => {
-      const { revokeObjectURL, restore } = makeDownloadMocks()
-
-      const wrapper = mount(ApplicationEditorPage, { props: { job } })
-      await flushPromises()
-      fetchMock.mockClear()
-      fetchMock.mockImplementation(() =>
-        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
-      )
-
-      await wrapper.find('.cl-download').trigger('click')
-      await flushPromises()
+      const { wrapper, revokeObjectURL, restore } = await mountAndClickDownload()
       // do NOT run timers — simulate unmount before the setTimeout fires
       wrapper.unmount()
 

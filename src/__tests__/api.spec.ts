@@ -33,6 +33,7 @@ describe('getJson', () => {
   it('returns parsed JSON on a 2xx response', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 42 }))
     const result = await getJson('/items')
+    // fallow-ignore-next-line code-duplication
     expect(result).toEqual({ id: 42 })
   })
 
@@ -147,6 +148,7 @@ describe('postJson', () => {
   it('returns parsed JSON on a 2xx response', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 42 }))
     const result = await postJson('/items', {})
+    // fallow-ignore-next-line code-duplication
     expect(result).toEqual({ id: 42 })
   })
 
