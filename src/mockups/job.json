@@ -10,13 +10,13 @@
     "postedAt": "Vor 8 Monaten",
     "scrapedAt": "2026-06-02T14:42:54.764Z",
     "tags": [
-        "Berufseinstieg",
-        "Vollzeit",
-        "Ingenieurwesen und IT",
-        "Einzelhandel"
+      "Berufseinstieg",
+      "Vollzeit",
+      "Ingenieurwesen und IT",
+      "Einzelhandel"
     ],
     "duplicateKey": "linkedin:4422110097",
-    "cosineSimilarity": 0.87
+    "match": 0.87
   },
   {
     "sourceHostname": "de.linkedin.com",
@@ -28,14 +28,9 @@
     "descriptionText": "**Du liebst skalierbare Systeme und sauberen Code?**\n\nAls Backend Engineer (m/w/d) baust du bei uns in *Berlin* robuste APIs und Microservices, die täglich Millionen von Requests bedienen.\n\n**Was dich erwartet**\n\n- Arbeit an einer modernen Cloud-Plattform (AWS, Kubernetes).\n- Ein erfahrenes Team mit starker Engineering-Kultur.\n- Viel Eigenverantwortung und Raum für technische Entscheidungen.\n\n**Wir bieten**\n\n- Flexible Arbeitszeiten und Remote-Optionen\n- 30 Tage Urlaub und faires Gehalt\n- Modernes Equipment deiner Wahl\n\n**Deine Aufgaben**\n\n- Du entwickelst und betreibst Backend-Services in Node.js und TypeScript.\n- Du sorgst für Performance, Sicherheit und Zuverlässigkeit unserer APIs.",
     "postedAt": "Vor 2 Wochen",
     "scrapedAt": "2026-06-03T09:15:00.000Z",
-    "tags": [
-        "Backend",
-        "Vollzeit",
-        "Node.js",
-        "Cloud"
-    ],
+    "tags": ["Backend", "Vollzeit", "Node.js", "Cloud"],
     "duplicateKey": "linkedin:4400112233",
-    "cosineSimilarity": 0.41
+    "match": 0.41
   },
   {
     "sourceHostname": "de.linkedin.com",
@@ -47,13 +42,8 @@
     "descriptionText": "**Du gestaltest Erlebnisse, die Menschen begeistern?**\n\nAls UX/UI Designer (m/w/d) entwickelst du bei uns in *München* intuitive Interfaces für digitale Produkte – von der ersten Idee bis zum finalen Pixel.\n\n**Was dich erwartet**\n\n- Spannende Projekte für namhafte Kunden.\n- Enge Zusammenarbeit mit Product und Engineering.\n- Ein kreatives Umfeld mit modernem Toolset (Figma).\n\n**Wir bieten**\n\n- Hybrides Arbeiten und flexible Zeiten\n- Weiterbildungsbudget und Konferenzbesuche\n- Ein herzliches, interdisziplinäres Team\n\n**Deine Aufgaben**\n\n- Du konzipierst Wireframes, Prototypen und finale UI-Designs.\n- Du führst Nutzerinterviews und Usability-Tests durch.",
     "postedAt": "Vor 5 Tagen",
     "scrapedAt": "2026-06-04T11:30:00.000Z",
-    "tags": [
-        "Design",
-        "Vollzeit",
-        "Figma",
-        "Kreativ"
-    ],
+    "tags": ["Design", "Vollzeit", "Figma", "Kreativ"],
     "duplicateKey": "linkedin:4488776655",
-    "cosineSimilarity": 0.63
+    "match": 0.63
   }
 ]
