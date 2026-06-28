@@ -1,139 +1,171 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref } from "vue";
+import { DEFAULT_DATE_POSTED } from "./searchParams";
 
-const MAX_KEYWORDS = 5
-const CITY_STORAGE_KEY = 'jobmatch.searchcity'
-const DISTANCE_STORAGE_KEY = 'jobmatch.searchdistance'
+const MAX_KEYWORDS = 5;
+const CITY_STORAGE_KEY = "jobmatch.searchcity";
+const DISTANCE_STORAGE_KEY = "jobmatch.searchdistance";
+const DATE_POSTED_STORAGE_KEY = "jobmatch.searchdateposted";
 
-const props = defineProps<{ keywords: string[] }>()
+const props = defineProps<{ keywords: string[] }>();
 const emit = defineEmits<{
-  'update:keywords': [value: string[]]
-  back: []
-}>()
+  "update:keywords": [value: string[]];
+  back: [];
+}>();
 
 function loadFromStorage(key: string): string {
-  try { return window.localStorage.getItem(key) ?? '' } catch { return '' }
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
 }
 
-const draft = ref('')
-const city = ref(loadFromStorage(CITY_STORAGE_KEY))
-const distance = ref(loadFromStorage(DISTANCE_STORAGE_KEY))
-const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
-let saveTimer: ReturnType<typeof setTimeout> | null = null
+const draft = ref("");
+const city = ref(loadFromStorage(CITY_STORAGE_KEY));
+const distance = ref(loadFromStorage(DISTANCE_STORAGE_KEY));
+const datePosted = ref(
+  loadFromStorage(DATE_POSTED_STORAGE_KEY) || DEFAULT_DATE_POSTED,
+);
+const saveState = ref<"idle" | "saving" | "saved">("idle");
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 onUnmounted(() => {
-  if (saveTimer !== null) clearTimeout(saveTimer)
-})
+  if (saveTimer !== null) clearTimeout(saveTimer);
+});
 
 function tagColor(kw: string): { background: string; borderColor: string } {
-  let hash = 5381
+  let hash = 5381;
   for (let i = 0; i < kw.length; i++) {
-    hash = ((hash * 33 + kw.charCodeAt(i)) >>> 0)
+    hash = (hash * 33 + kw.charCodeAt(i)) >>> 0;
   }
-  const hue = Math.round((hash * 137.508) % 360)
-  const sat = 60 + (hash % 22)
+  const hue = Math.round((hash * 137.508) % 360);
+  const sat = 60 + (hash % 22);
   return {
     background: `hsl(${hue} ${sat}% 95%)`,
     borderColor: `hsl(${hue} ${Math.max(40, sat - 18)}% 82%)`,
-  }
+  };
 }
 
 function markSaving() {
-  saveState.value = 'saving'
-  if (saveTimer !== null) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => (saveState.value = 'saved'), 650)
+  saveState.value = "saving";
+  if (saveTimer !== null) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => (saveState.value = "saved"), 650);
 }
 
 function persist(next: string[]) {
-  emit('update:keywords', next)
-  markSaving()
+  emit("update:keywords", next);
+  markSaving();
 }
 
 function onCityChange(event: Event) {
-  const v = (event.target as HTMLInputElement).value
-  city.value = v
-  try { window.localStorage.setItem(CITY_STORAGE_KEY, v) } catch {}
-  markSaving()
+  const v = (event.target as HTMLInputElement).value;
+  city.value = v;
+  try {
+    window.localStorage.setItem(CITY_STORAGE_KEY, v);
+  } catch {}
+  markSaving();
 }
 
 function onDistanceChange(event: Event) {
-  const el = event.target as HTMLInputElement
-  const v = el.value.replace(/[^0-9]/g, '').slice(0, 3)
-  distance.value = v
-  el.value = v
-  try { window.localStorage.setItem(DISTANCE_STORAGE_KEY, v) } catch {}
-  markSaving()
+  const el = event.target as HTMLInputElement;
+  const v = el.value.replace(/[^0-9]/g, "").slice(0, 3);
+  distance.value = v;
+  el.value = v;
+  try {
+    window.localStorage.setItem(DISTANCE_STORAGE_KEY, v);
+  } catch {}
+  markSaving();
+}
+
+function onDatePostedChange(event: Event) {
+  const v = (event.target as HTMLSelectElement).value;
+  datePosted.value = v;
+  try {
+    window.localStorage.setItem(DATE_POSTED_STORAGE_KEY, v);
+  } catch {}
+  markSaving();
 }
 
 function addKeywords(raw: string) {
   const incoming = raw
-    .split(',')
+    .split(",")
     .map((s) => s.trim())
-    .filter(Boolean)
-  if (!incoming.length || props.keywords.length >= MAX_KEYWORDS) return
-  const seen = new Set(props.keywords.map((k) => k.toLowerCase()))
-  const next = [...props.keywords]
+    .filter(Boolean);
+  if (!incoming.length || props.keywords.length >= MAX_KEYWORDS) return;
+  const seen = new Set(props.keywords.map((k) => k.toLowerCase()));
+  const next = [...props.keywords];
   for (const k of incoming) {
-    if (next.length >= MAX_KEYWORDS) break
+    if (next.length >= MAX_KEYWORDS) break;
     if (!seen.has(k.toLowerCase())) {
-      seen.add(k.toLowerCase())
-      next.push(k)
+      seen.add(k.toLowerCase());
+      next.push(k);
     }
   }
-  if (next.length !== props.keywords.length) persist(next)
+  if (next.length !== props.keywords.length) persist(next);
 }
 
 function removeKeyword(idx: number) {
-  persist(props.keywords.filter((_, i) => i !== idx))
+  persist(props.keywords.filter((_, i) => i !== idx));
 }
 
 function onChange(event: Event) {
-  const v = (event.target as HTMLInputElement).value
-  if (v.includes(',')) {
-    const parts = v.split(',')
-    const tail = parts.pop()!
-    addKeywords(parts.join(','))
-    draft.value = tail.trimStart()
+  const v = (event.target as HTMLInputElement).value;
+  if (v.includes(",")) {
+    const parts = v.split(",");
+    const tail = parts.pop()!;
+    addKeywords(parts.join(","));
+    draft.value = tail.trimStart();
   } else {
-    draft.value = v
+    draft.value = v;
   }
 }
 
 function onKeyDown(event: KeyboardEvent) {
-  if (event.key === 'Enter') {
-    event.preventDefault()
+  if (event.key === "Enter") {
+    event.preventDefault();
     if (draft.value.trim()) {
-      addKeywords(draft.value)
-      draft.value = ''
+      addKeywords(draft.value);
+      draft.value = "";
     }
-  } else if (event.key === 'Backspace' && !draft.value && props.keywords.length) {
-    removeKeyword(props.keywords.length - 1)
+  } else if (
+    event.key === "Backspace" &&
+    !draft.value &&
+    props.keywords.length
+  ) {
+    removeKeyword(props.keywords.length - 1);
   }
 }
 
 function onBlur() {
   if (draft.value.trim()) {
-    addKeywords(draft.value)
-    draft.value = ''
+    addKeywords(draft.value);
+    draft.value = "";
   }
 }
 
-const atLimit = computed(() => props.keywords.length >= MAX_KEYWORDS)
+const atLimit = computed(() => props.keywords.length >= MAX_KEYWORDS);
 
 const hint = computed(() =>
-  saveState.value === 'saving'
-    ? 'Saving…'
-    : saveState.value === 'saved'
-      ? 'Saved'
-      : 'Keywords auto-save as you type',
-)
+  saveState.value === "saving"
+    ? "Saving…"
+    : saveState.value === "saved"
+      ? "Saved"
+      : "Keywords auto-save as you type",
+);
 </script>
 
 <template>
   <div class="cl-screen">
     <header class="cl-header">
       <button type="button" class="cl-header__back" @click="emit('back')">
-        <svg width="11" height="18" viewBox="0 0 11 18" fill="none" aria-hidden="true">
+        <svg
+          width="11"
+          height="18"
+          viewBox="0 0 11 18"
+          fill="none"
+          aria-hidden="true"
+        >
           <path
             d="M9 2L2 9l7 7"
             stroke="currentColor"
@@ -155,7 +187,11 @@ const hint = computed(() =>
         type="text"
         :value="draft"
         :disabled="atLimit"
-        :placeholder="atLimit ? 'Maximum of 5 keywords reached' : 'e.g. react, remote, senior…'"
+        :placeholder="
+          atLimit
+            ? 'Maximum of 5 keywords reached'
+            : 'e.g. react, remote, senior…'
+        "
         autocomplete="off"
         @input="onChange"
         @keydown="onKeyDown"
@@ -164,12 +200,17 @@ const hint = computed(() =>
       <p class="se-help">
         {{
           atLimit
-            ? 'Remove a keyword to add another (max 5).'
+            ? "Remove a keyword to add another (max 5)."
             : `Separate multiple keywords with a comma. ${MAX_KEYWORDS - keywords.length} left.`
         }}
       </p>
 
-      <div v-if="keywords.length > 0" class="se-tags" role="list" aria-label="Saved keywords">
+      <div
+        v-if="keywords.length > 0"
+        class="se-tags"
+        role="list"
+        aria-label="Saved keywords"
+      >
         <span
           v-for="(kw, i) in keywords"
           :key="kw + i"
@@ -184,7 +225,13 @@ const hint = computed(() =>
             :aria-label="'Remove ' + kw"
             @click="removeKeyword(i)"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              aria-hidden="true"
+            >
               <path
                 d="M3 3l6 6M9 3l-6 6"
                 stroke="currentColor"
@@ -195,7 +242,9 @@ const hint = computed(() =>
           </button>
         </span>
       </div>
-      <p v-else class="se-empty">No keywords yet. Add a few to focus your feed.</p>
+      <p v-else class="se-empty">
+        No keywords yet. Add a few to focus your feed.
+      </p>
 
       <label class="se-field-label se-field-label--spaced" for="se-city">
         Location <span class="se-field-label__opt">(optional)</span>
@@ -228,6 +277,21 @@ const hint = computed(() =>
         <span class="se-num__unit">km</span>
       </div>
       <p class="se-help">Search radius around the location, in kilometers.</p>
+
+      <label class="se-field-label se-field-label--spaced" for="se-date-posted">
+        Date posted
+      </label>
+      <select
+        id="se-date-posted"
+        class="se-input"
+        :value="datePosted"
+        @change="onDatePostedChange"
+      >
+        <option value="86400">Past 24 hours</option>
+        <option value="604800">Past week</option>
+        <option value="2592000">Past month</option>
+      </select>
+      <p class="se-help">Only show jobs posted within this time window.</p>
     </div>
 
     <div class="cl-meta">
@@ -235,7 +299,10 @@ const hint = computed(() =>
         <span class="se-save-dot" :data-state="saveState" />
         {{ hint }}
       </span>
-      <span>{{ keywords.length }}/{{ MAX_KEYWORDS }} {{ keywords.length === 1 ? 'keyword' : 'keywords' }}</span>
+      <span
+        >{{ keywords.length }}/{{ MAX_KEYWORDS }}
+        {{ keywords.length === 1 ? "keyword" : "keywords" }}</span
+      >
     </div>
   </div>
 </template>
@@ -270,7 +337,7 @@ const hint = computed(() =>
   padding: 6px 4px;
   margin-left: -4px;
   color: var(--text-color);
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -313,7 +380,7 @@ const hint = computed(() =>
 }
 
 .se-field-label {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -342,7 +409,7 @@ const hint = computed(() =>
   border-radius: 12px;
   background: #fff;
   padding: 12px 14px;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 15px;
   font-weight: 500;
   color: var(--text-color);
@@ -370,7 +437,7 @@ const hint = computed(() =>
 
 .se-help {
   margin: 8px 2px 0;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 12px;
   color: var(--border-color);
 }
@@ -390,7 +457,7 @@ const hint = computed(() =>
   padding: 6px 8px 6px 12px;
   border-radius: 999px;
   border: 1px solid;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-color);
@@ -419,7 +486,7 @@ const hint = computed(() =>
 
 .se-empty {
   margin-top: 24px;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 13px;
   color: var(--border-color);
   text-align: center;
@@ -445,7 +512,7 @@ const hint = computed(() =>
   outline: none;
   background: transparent;
   padding: 12px 14px;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -464,7 +531,7 @@ const hint = computed(() =>
   padding: 0 16px;
   background: var(--border-color);
   color: var(--background-color);
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -479,12 +546,12 @@ const hint = computed(() =>
   transition: background 0.2s ease;
 }
 
-.se-save-dot[data-state='saving'] {
+.se-save-dot[data-state="saving"] {
   background: var(--accents-green);
   animation: se-save-pulse 0.7s ease-in-out infinite;
 }
 
-.se-save-dot[data-state='saved'] {
+.se-save-dot[data-state="saved"] {
   background: var(--accents-green);
 }
 
@@ -512,7 +579,7 @@ const hint = computed(() =>
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .se-save-dot[data-state='saving'] {
+  .se-save-dot[data-state="saving"] {
     animation: none;
   }
   .se-tag {
