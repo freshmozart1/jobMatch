@@ -1,17 +1,20 @@
 <script setup lang="ts">
-defineProps<{ enabled: boolean; threshold: number }>()
+defineProps<{ enabled: boolean; threshold: number }>();
 const emit = defineEmits<{
-  'update:enabled': [value: boolean]
-  'update:threshold': [value: number]
-  search: []
-}>()
+  "update:enabled": [value: boolean];
+  "update:threshold": [value: number];
+  search: [];
+}>();
 
 function clamp(n: number): number {
-  return Math.max(0, Math.min(100, n))
+  return Math.max(0, Math.min(100, n));
 }
 
 function onThresholdInput(event: Event) {
-  emit('update:threshold', clamp(Number((event.target as HTMLInputElement).value)))
+  emit(
+    "update:threshold",
+    clamp(Number((event.target as HTMLInputElement).value)),
+  );
 }
 </script>
 
@@ -28,7 +31,9 @@ function onThresholdInput(event: Event) {
     >
       <i />
     </button>
-    <span class="match-filter__label">{{ enabled ? 'Min. match' : 'Show all jobs' }}</span>
+    <span class="match-filter__label">{{
+      enabled ? "Min. match" : "Show all jobs"
+    }}</span>
     <span class="match-filter__num" :data-disabled="enabled ? '0' : '1'">
       <input
         type="number"
@@ -37,7 +42,7 @@ function onThresholdInput(event: Event) {
         step="5"
         :value="threshold"
         :disabled="!enabled"
-        aria-label="Minimum cosine similarity percentage"
+        aria-label="Minimum match percentage"
         @input="onThresholdInput"
       />
       <span class="match-filter__unit">%</span>
@@ -48,7 +53,11 @@ function onThresholdInput(event: Event) {
       aria-label="Search jobs"
       @click="emit('search')"
     >
-      <svg class="match-filter__search-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg
+        class="match-filter__search-icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
         <path
           fill="none"
           stroke="currentColor"
@@ -91,7 +100,7 @@ function onThresholdInput(event: Event) {
   -webkit-tap-highlight-color: transparent;
 }
 
-.match-filter__switch[data-on='1'] {
+.match-filter__switch[data-on="1"] {
   background: var(--accents-green);
 }
 
@@ -107,13 +116,13 @@ function onThresholdInput(event: Event) {
   transition: transform 0.18s ease;
 }
 
-.match-filter__switch[data-on='1'] i {
+.match-filter__switch[data-on="1"] i {
   transform: translateX(16px);
 }
 
 .match-filter__label {
   flex: 1 1 auto;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-color);
@@ -131,7 +140,7 @@ function onThresholdInput(event: Event) {
   transition: opacity 0.18s ease;
 }
 
-.match-filter__num[data-disabled='1'] {
+.match-filter__num[data-disabled="1"] {
   opacity: 0.4;
 }
 
@@ -140,7 +149,7 @@ function onThresholdInput(event: Event) {
   border: none;
   outline: none;
   background: transparent;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -157,7 +166,7 @@ function onThresholdInput(event: Event) {
 }
 
 .match-filter__unit {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 13px;
   font-weight: 600;
   color: var(--border-color);

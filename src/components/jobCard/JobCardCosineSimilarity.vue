@@ -1,39 +1,39 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed } from "vue";
 
-const props = defineProps<{ value: number }>()
+const props = defineProps<{ value: number }>();
 
-// cosineSimilarity ∈ [0, 1]: how closely this job matches the running average
-// of the user's liked jobs.
-const isValid = computed(() => typeof props.value === 'number' && !Number.isNaN(props.value))
-const clamped = computed(() => Math.max(0, Math.min(1, props.value)))
-const percent = computed(() => Math.round(clamped.value * 100))
+const isValid = computed(
+  () => typeof props.value === "number" && !Number.isNaN(props.value),
+);
+const clamped = computed(() => Math.max(0, Math.min(1, props.value)));
+const percent = computed(() => Math.round(clamped.value * 100));
 
-function cosineSimilarityLevel(value: number): string {
-  if (value >= 0.75) return 'strong match'
-  if (value >= 0.5) return 'moderate match'
-  if (value >= 0.25) return 'weak match'
-  return 'poor match'
+function matchLevel(value: number): string {
+  if (value >= 0.75) return "strong match";
+  if (value >= 0.5) return "moderate match";
+  if (value >= 0.25) return "weak match";
+  return "poor match";
 }
 
-const level = computed(() => cosineSimilarityLevel(clamped.value))
+const level = computed(() => matchLevel(clamped.value));
 
 // Hue travels pink (low) → green (high), echoing NOPE/LIKE; fixed L & C keep the
 // accent harmonious with the design tokens.
-const fillColor = computed(() => `oklch(0.68 0.19 ${(12 + clamped.value * 133).toFixed(1)})`)
+const fillColor = computed(
+  () => `oklch(0.68 0.19 ${(12 + clamped.value * 133).toFixed(1)})`,
+);
 
-const altText = computed(
-  () => `Match to your liked jobs: ${percent.value}% cosine similarity — ${level.value}.`,
-)
+const altText = computed(() => `Match: ${percent.value}% — ${level.value}.`);
 </script>
 
 <template>
   <div
     v-if="isValid"
     class="cosine-indicator"
-    data-testid="cosineSimilarityIndicator"
+    data-testid="matchIndicator"
     role="meter"
-    aria-label="Match to your liked jobs"
+    aria-label="Match score"
     :aria-valuemin="0"
     :aria-valuemax="1"
     :aria-valuenow="Number(clamped.toFixed(2))"
@@ -47,7 +47,9 @@ const altText = computed(
         :style="{ width: percent + '%', background: fillColor }"
       />
     </span>
-    <span class="cosine-indicator__value" aria-hidden="true">{{ percent }}%</span>
+    <span class="cosine-indicator__value" aria-hidden="true"
+      >{{ percent }}%</span
+    >
   </div>
 </template>
 
@@ -63,7 +65,7 @@ const altText = computed(
 
 .cosine-indicator__label {
   flex: 0 0 auto;
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
