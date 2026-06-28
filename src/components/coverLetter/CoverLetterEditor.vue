@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 
-defineProps<{ job: ScrapedJob; text: string; statusLabel: string; words: number }>()
+const props = defineProps<{ job: ScrapedJob; text: string; statusLabel: string; words: number }>()
 defineEmits<{ input: [value: string] }>()
+
+const safeUrl = computed(() =>
+  props.job.sourceUrl.startsWith('https://') ? props.job.sourceUrl : null,
+)
 
 type Segment = { text: string; bold: boolean }
 
@@ -26,12 +31,35 @@ function parseDescription(raw: string): Segment[] {
   <div class="cl-body cl--letter">
     <div class="cl-paper">
       <div class="cl-paper__subject">
-        <div class="cl-marquee">
-          <div class="cl-marquee__track">
-            <span class="cl-marquee__item">{{ job.title }}</span>
-            <span class="cl-marquee__item" aria-hidden="true">{{ job.title }}</span>
-          </div>
+        <div class="cl-paper__subject-text">
+          <span class="cl-paper__subject-title">{{ job.title }}</span>
+          <span class="cl-paper__subject-company">{{ job.company }}</span>
         </div>
+        <a
+          v-if="safeUrl"
+          class="cl-paper__subject-link"
+          :href="safeUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          :aria-label="`View job posting: ${job.title} at ${job.company}`"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M14 5h5v5M19 5l-8 8"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M18 14v3.5A2.5 2.5 0 0 1 15.5 20h-9A2.5 2.5 0 0 1 4 17.5v-9A2.5 2.5 0 0 1 6.5 6H10"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </a>
       </div>
       <div v-if="job.descriptionText" class="cl-paper__jobdesc">
         <template v-for="(seg, i) in parseDescription(job.descriptionText)" :key="i">
@@ -81,6 +109,9 @@ function parseDescription(raw: string): Segment[] {
 }
 
 .cl-paper__subject {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -91,49 +122,52 @@ function parseDescription(raw: string): Segment[] {
   margin-bottom: 16px;
 }
 
-.cl-marquee {
+.cl-paper__subject-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cl-paper__subject-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-color);
+  text-transform: none;
+  letter-spacing: 0;
   overflow: hidden;
   white-space: nowrap;
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 14px,
-    #000 calc(100% - 14px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 14px,
-    #000 calc(100% - 14px),
-    transparent 100%
-  );
+  text-overflow: ellipsis;
 }
 
-.cl-marquee__track {
+.cl-paper__subject-company {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--border-color);
+}
+
+.cl-paper__subject-link {
+  flex: 0 0 auto;
   display: inline-flex;
-  animation: cl-marquee-scroll 16s linear infinite;
-  will-change: transform;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--border-color);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
 }
 
-.cl-marquee__item {
-  white-space: nowrap;
-  padding-right: 3em;
+.cl-paper__subject-link:hover {
+  opacity: 0.6;
 }
 
-@keyframes cl-marquee-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cl-marquee__track {
-    animation: none;
-  }
+.cl-paper__subject-link svg {
+  width: 14px;
+  height: 14px;
 }
 
 .cl-paper__jobdesc {
