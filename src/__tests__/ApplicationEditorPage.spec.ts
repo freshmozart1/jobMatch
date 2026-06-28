@@ -12,6 +12,7 @@ const job2: ScrapedJob = {
   location: 'Berlin',
   scrapedAt: '2026-06-08T10:00:00.000Z',
   duplicateKey: 'linkedin:2002',
+  embedding: [],
 }
 
 const job: ScrapedJob = {
@@ -24,6 +25,7 @@ const job: ScrapedJob = {
   descriptionText: '**Requirements**: 3 years experience.',
   scrapedAt: '2026-06-08T10:00:00.000Z',
   duplicateKey: 'linkedin:1001',
+  embedding: [],
 }
 
 describe('ApplicationEditorPage', () => {
@@ -31,9 +33,9 @@ describe('ApplicationEditorPage', () => {
 
   beforeEach(() => {
     // Use mockImplementation so each call gets a fresh Response (body streams are single-use).
-    fetchMock = vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response('{}', { status: 200 })),
-    )
+    fetchMock = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(new Response('{}', { status: 200 })))
     vi.stubGlobal('fetch', fetchMock)
     vi.useFakeTimers()
   })
@@ -191,9 +193,7 @@ describe('ApplicationEditorPage', () => {
     fetchMock
       .mockResolvedValueOnce(new Response('{}', { status: 200 })) // CV status check
       .mockResolvedValueOnce(new Response('{}', { status: 201 })) // /jobs/create succeeds
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
-      ) // /cover-letters/upload/text fails
+      .mockResolvedValue(new Response(JSON.stringify({ error: 'Server error' }), { status: 500 })) // /cover-letters/upload/text fails
     const wrapper = await mountAndOpen()
     await typeAndFlush(wrapper, 'Hello')
     expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Save failed — retrying on next edit')
@@ -269,9 +269,7 @@ describe('ApplicationEditorPage', () => {
     fetchMock
       .mockResolvedValueOnce(new Response('{}', { status: 404 })) // CV status check — no CV
       .mockResolvedValueOnce(new Response('{}', { status: 201 })) // /jobs/create succeeds
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
-      ) // /cv/upload fails
+      .mockResolvedValue(new Response(JSON.stringify({ error: 'Server error' }), { status: 500 })) // /cv/upload fails
     const wrapper = mount(ApplicationEditorPage, { props: { job } })
     await flushPromises()
     const file = new File(['content'], 'cv.pdf', { type: 'application/pdf' })
@@ -290,9 +288,7 @@ describe('ApplicationEditorPage', () => {
   it('does not call /cv/upload when job creation fails', async () => {
     fetchMock
       .mockResolvedValueOnce(new Response('{}', { status: 404 })) // CV status check — no CV
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Server error' }), { status: 500 }),
-      ) // /jobs/create fails
+      .mockResolvedValue(new Response(JSON.stringify({ error: 'Server error' }), { status: 500 })) // /jobs/create fails
     const { urls } = await mountAndUploadCvFile()
     expect(urls.some((u) => u.includes('/cv/upload'))).toBe(false)
   })
@@ -321,7 +317,10 @@ describe('ApplicationEditorPage', () => {
         revokeObjectURL,
         anchorClick,
         getAnchor: () => capturedAnchor,
-        restore: () => { vi.restoreAllMocks(); vi.unstubAllGlobals() },
+        restore: () => {
+          vi.restoreAllMocks()
+          vi.unstubAllGlobals()
+        },
       }
     }
 
@@ -371,7 +370,10 @@ describe('ApplicationEditorPage', () => {
       fetchMock
         .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
         .mockImplementationOnce(
-          () => new Promise<Response>((res) => { resolveFirst = () => res(new Response(new Blob(['%PDF']), { status: 200 })) }),
+          () =>
+            new Promise<Response>((res) => {
+              resolveFirst = () => res(new Response(new Blob(['%PDF']), { status: 200 }))
+            }),
         ) // first download — held pending
 
       const wrapper = mount(ApplicationEditorPage, { props: { job } })
@@ -412,7 +414,10 @@ describe('ApplicationEditorPage', () => {
       fetchMock
         .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
         .mockImplementationOnce(
-          () => new Promise<Response>((_, rej) => { rejectFetch = rej }),
+          () =>
+            new Promise<Response>((_, rej) => {
+              rejectFetch = rej
+            }),
         )
 
       const wrapper = mount(ApplicationEditorPage, { props: { job } })
