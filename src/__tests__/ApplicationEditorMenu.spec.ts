@@ -40,7 +40,7 @@ describe('ApplicationEditorMenu', () => {
   describe('cover letter action', () => {
     it('emits "openLetter" when the cover letter action is clicked', async () => {
       const wrapper = mountMenu()
-      await wrapper.findAll('.cl-action')[0].trigger('click')
+      await wrapper.findAll('.cl-action')[0]!.trigger('click')
       expect(wrapper.emitted('openLetter')).toBeTruthy()
     })
   })

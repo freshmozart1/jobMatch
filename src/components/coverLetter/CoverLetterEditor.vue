@@ -2,8 +2,17 @@
 import { computed } from 'vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
 
-const props = defineProps<{ job: ScrapedJob; text: string; statusLabel: string; words: number }>()
-defineEmits<{ input: [value: string] }>()
+const props = withDefaults(
+  defineProps<{
+    job: ScrapedJob
+    text: string
+    statusLabel: string
+    words: number
+    generating?: boolean
+  }>(),
+  { generating: false },
+)
+defineEmits<{ input: [value: string]; generate: [] }>()
 
 const safeUrl = computed(() =>
   props.job.sourceUrl.startsWith('https://') ? props.job.sourceUrl : null,
@@ -79,6 +88,25 @@ function parseDescription(raw: string): Segment[] {
 
   <div class="cl-meta">
     <span>{{ statusLabel }}</span>
+    <button
+      type="button"
+      :class="['cl-generate', { 'cl-generate--busy': generating }]"
+      :disabled="generating"
+      aria-label="Generate cover letter with AI"
+      title="Generate with AI"
+      @click="$emit('generate')"
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M12 2.5c.5 3.4 1.6 5 5.5 5.5-3.9.5-5 2.1-5.5 5.5-.5-3.4-1.6-5-5.5-5.5 3.9-.5 5-2.1 5.5-5.5Z"
+          fill="currentColor"
+        />
+        <path
+          d="M18.5 13.5c.3 1.8.8 2.5 2.5 2.8-1.7.3-2.2 1-2.5 2.7-.3-1.8-.8-2.5-2.5-2.7 1.7-.3 2.2-1 2.5-2.8Z"
+          fill="currentColor"
+        />
+      </svg>
+    </button>
     <span>{{ words }} {{ words === 1 ? 'word' : 'words' }}</span>
   </div>
 </template>
@@ -218,5 +246,43 @@ function parseDescription(raw: string): Segment[] {
   color: var(--border-color);
   background: var(--background-color);
   border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.cl-generate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accents-pink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+
+.cl-generate:active {
+  transform: scale(0.88);
+}
+
+.cl-generate svg {
+  width: 28px;
+  height: 28px;
+}
+
+.cl-generate--busy {
+  cursor: progress;
+}
+
+.cl-generate--busy svg {
+  animation: cl-generate-spin 1s linear infinite;
+}
+
+@keyframes cl-generate-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

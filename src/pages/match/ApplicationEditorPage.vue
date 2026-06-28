@@ -147,7 +147,10 @@ async function uploadNow(
     }
   } catch (error) {
     if (isCurrentJob()) saveStatus.value = 'error'
-    console.error('Failed to upload cover letter:', error instanceof Error ? error.message : String(error))
+    console.error(
+      'Failed to upload cover letter:',
+      error instanceof Error ? error.message : String(error),
+    )
   } finally {
     uploadInFlight = false
     if (needsReschedule(newKey, snapshot)) scheduleUpload()
@@ -194,7 +197,10 @@ async function downloadApplication() {
   downloadInFlight = true
   downloadAbortController = new AbortController()
   try {
-    const blob = await getBlob('/application/' + props.job.duplicateKey, downloadAbortController.signal)
+    const blob = await getBlob(
+      '/application/' + props.job.duplicateKey,
+      downloadAbortController.signal,
+    )
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -231,6 +237,35 @@ onBeforeUnmount(() => {
     pendingDownloadRevoke?.()
   }
 })
+
+const generating = ref(false)
+
+async function generateCoverLetter() {
+  if (generating.value) return
+  generating.value = true
+  const keyAtStart = props.job.duplicateKey
+  const { embedding, ...jobData } = props.job
+  try {
+    const { coverLetterIds } = await postJson<{ coverLetterIds: string[] }>(
+      '/jobs/top-x-similar-cover-letters',
+      { embedding, x: 3 },
+    )
+    if (keyAtStart !== props.job.duplicateKey) return
+    const { coverLetter } = await postJson<{ coverLetter: string }>('/cover-letters/create/text', {
+      ...jobData,
+      coverLetterIds,
+    })
+    if (keyAtStart !== props.job.duplicateKey) return
+    onChange(coverLetter)
+  } catch (error) {
+    console.error(
+      'Failed to generate cover letter:',
+      error instanceof Error ? error.message : String(error),
+    )
+  } finally {
+    generating.value = false
+  }
+}
 
 const words = computed(() => (text.value.trim() ? text.value.trim().split(/\s+/).length : 0))
 
@@ -276,7 +311,9 @@ const statusLabel = computed(() => {
       :text="text"
       :status-label="statusLabel"
       :words="words"
+      :generating="generating"
       @input="onChange"
+      @generate="generateCoverLetter"
     />
   </div>
 </template>

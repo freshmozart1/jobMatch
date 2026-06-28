@@ -13,6 +13,7 @@ const baseJob: ScrapedJob = {
   descriptionText: 'Some description.',
   scrapedAt: '2026-06-08T10:00:00.000Z',
   duplicateKey: 'linkedin:1001',
+  embedding: [],
 }
 
 function mountEditor(
@@ -48,8 +49,8 @@ describe('CoverLetterEditor', () => {
       const strongs = wrapper.findAll('.cl-paper__jobdesc strong')
       // fallow-ignore-next-line code-duplication
       expect(strongs).toHaveLength(2)
-      expect(strongs[0].text()).toBe('A')
-      expect(strongs[1].text()).toBe('B')
+      expect(strongs[0]!.text()).toBe('A')
+      expect(strongs[1]!.text()).toBe('B')
     })
 
     it('handles bold at the start of text', () => {
@@ -73,24 +74,24 @@ describe('CoverLetterEditor', () => {
   describe('word count', () => {
     it('shows "1 word" for words=1', () => {
       const wrapper = mountEditor({}, { words: 1 })
-      expect(wrapper.findAll('.cl-meta span')[1].text()).toBe('1 word')
+      expect(wrapper.findAll('.cl-meta span')[1]!.text()).toBe('1 word')
     })
 
     it('shows "2 words" for words=2', () => {
       const wrapper = mountEditor({}, { words: 2 })
-      expect(wrapper.findAll('.cl-meta span')[1].text()).toBe('2 words')
+      expect(wrapper.findAll('.cl-meta span')[1]!.text()).toBe('2 words')
     })
 
     it('shows "0 words" for words=0', () => {
       const wrapper = mountEditor({}, { words: 0 })
-      expect(wrapper.findAll('.cl-meta span')[1].text()).toBe('0 words')
+      expect(wrapper.findAll('.cl-meta span')[1]!.text()).toBe('0 words')
     })
   })
 
   describe('statusLabel', () => {
     it('displays the statusLabel prop in the first meta span', () => {
       const wrapper = mountEditor({}, { statusLabel: 'Saved to server' })
-      expect(wrapper.findAll('.cl-meta span')[0].text()).toBe('Saved to server')
+      expect(wrapper.findAll('.cl-meta span')[0]!.text()).toBe('Saved to server')
     })
   })
 

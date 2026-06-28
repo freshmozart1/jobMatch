@@ -38,8 +38,8 @@ describe('JobCardDescription', () => {
       const strongs = wrapper.findAll('.job-card__description strong')
       // fallow-ignore-next-line code-duplication
       expect(strongs).toHaveLength(2)
-      expect(strongs[0].text()).toBe('A')
-      expect(strongs[1].text()).toBe('B')
+      expect(strongs[0]!.text()).toBe('A')
+      expect(strongs[1]!.text()).toBe('B')
     })
 
     it('handles bold at the start of text', () => {
