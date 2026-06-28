@@ -4,9 +4,19 @@ import JobCard from './JobCard.vue'
 import JobCardContainer from './JobCardContainer.vue'
 import type { ScrapedJob } from './types'
 
-const props = withDefaults(defineProps<{ jobs: ScrapedJob[]; emptyLabel?: string }>(), {
-  emptyLabel: 'No more jobs',
-})
+const props = withDefaults(
+  defineProps<{
+    jobs: ScrapedJob[]
+    emptyLabel?: string
+    loadingLabel?: string
+    isLoading?: boolean
+  }>(),
+  {
+    emptyLabel: 'No more jobs',
+    loadingLabel: 'Loading more jobs...',
+    isLoading: false,
+  },
+)
 const emit = defineEmits<{
   (e: 'like', job: ScrapedJob, like: boolean): void
   (e: 'edit', job: ScrapedJob): void
@@ -50,7 +60,10 @@ function onSwipe(direction: 'left' | 'right') {
         @edit="emit('edit', currentJob)"
       />
     </div>
-    <p v-else class="job-card-stack__empty">{{ emptyLabel }}</p>
+    <template v-else>
+      <p v-if="isLoading" class="job-card-stack__loading">{{ loadingLabel }}</p>
+      <p v-else class="job-card-stack__empty">{{ emptyLabel }}</p>
+    </template>
   </div>
 </template>
 
@@ -71,7 +84,9 @@ function onSwipe(direction: 'left' | 'right') {
   width: var(--job-card-width);
   transform-origin: center center;
   pointer-events: none;
-  transition: transform 0.32s ease, opacity 0.32s ease;
+  transition:
+    transform 0.32s ease,
+    opacity 0.32s ease;
 }
 
 .job-card-stack__current {
@@ -84,11 +99,28 @@ function onSwipe(direction: 'left' | 'right') {
   width: var(--job-card-width);
 }
 
-.job-card-stack__empty {
+.job-card-stack__empty,
+.job-card-stack__loading {
   font-family: 'Inter', sans-serif;
   font-size: 18px;
   font-weight: 400;
   color: var(--border-color);
   text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .job-card-stack__loading {
+    animation: stack-loading-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes stack-loading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 </style>
