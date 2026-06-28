@@ -1,27 +1,25 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import JobCardCompany from "./JobCardCompany.vue";
-import JobCardCosineSimilarity from "./JobCardCosineSimilarity.vue";
-import JobCardDescription from "./JobCardDescription.vue";
-import JobCardTags from "./JobCardTags.vue";
-import JobCardTitle from "./JobCardTitle.vue";
-import type { ScrapedJob } from "./types";
+import { computed } from 'vue'
+import JobCardCompany from './JobCardCompany.vue'
+import JobCardCosineSimilarity from './JobCardCosineSimilarity.vue'
+import JobCardDescription from './JobCardDescription.vue'
+import JobCardTags from './JobCardTags.vue'
+import JobCardTitle from './JobCardTitle.vue'
+import type { ScrapedJob } from './types'
 
 const props = defineProps<{
-  job: ScrapedJob;
-  dragOffsetX?: number;
-  isDragging?: boolean;
-}>();
+  job: ScrapedJob
+  dragOffsetX?: number
+  isDragging?: boolean
+}>()
 
-const progress = computed(() =>
-  Math.min(Math.abs(props.dragOffsetX ?? 0) / 160, 1),
-);
+const progress = computed(() => Math.min(Math.abs(props.dragOffsetX ?? 0) / 160, 1))
 const direction = computed(() => {
-  if ((props.dragOffsetX ?? 0) > 0) return "right";
-  if ((props.dragOffsetX ?? 0) < 0) return "left";
-  return "none";
-});
-const rotation = computed(() => (props.dragOffsetX ?? 0) * 0.06);
+  if ((props.dragOffsetX ?? 0) > 0) return 'right'
+  if ((props.dragOffsetX ?? 0) < 0) return 'left'
+  return 'none'
+})
+const rotation = computed(() => (props.dragOffsetX ?? 0) * 0.06)
 </script>
 
 <template>
@@ -32,24 +30,15 @@ const rotation = computed(() => (props.dragOffsetX ?? 0) * 0.06);
       transform: `translateX(${dragOffsetX ?? 0}px) rotate(${rotation}deg)`,
     }"
   >
-    <div
-      class="stamp stamp--like"
-      :style="{ opacity: direction === 'right' ? progress : 0 }"
-    >
+    <div class="stamp stamp--like" :style="{ opacity: direction === 'right' ? progress : 0 }">
       Like
     </div>
-    <div
-      class="stamp stamp--nope"
-      :style="{ opacity: direction === 'left' ? progress : 0 }"
-    >
+    <div class="stamp stamp--nope" :style="{ opacity: direction === 'left' ? progress : 0 }">
       Nope
     </div>
     <JobCardTitle :title="job.title" />
-    <JobCardCompany :company="job.company" />
-    <JobCardCosineSimilarity
-      v-if="typeof job.match === 'number'"
-      :value="job.match"
-    />
+    <JobCardCompany :company="job.company" :source-url="job.sourceUrl" />
+    <JobCardCosineSimilarity v-if="typeof job.match === 'number'" :value="job.match" />
     <JobCardTags :tags="job.tags" />
     <JobCardDescription :descriptionText="job.descriptionText" />
   </article>
