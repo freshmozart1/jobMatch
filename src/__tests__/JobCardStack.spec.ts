@@ -53,4 +53,18 @@ describe('JobCardStack', () => {
     expect(wrapper.findComponent(JobCardContainer).exists()).toBe(false)
     expect(wrapper.find('.job-card-stack__empty').text()).toBe('No more jobs')
   })
+
+  it('shows a loading indicator when the stack is empty and isLoading is true', () => {
+    const wrapper = mount(JobCardStack, { props: { jobs: [], isLoading: true } })
+
+    expect(wrapper.find('.job-card-stack__loading').exists()).toBe(true)
+    expect(wrapper.find('.job-card-stack__empty').exists()).toBe(false)
+  })
+
+  it('shows the empty label when the stack is empty and isLoading is false', () => {
+    const wrapper = mount(JobCardStack, { props: { jobs: [], isLoading: false } })
+
+    expect(wrapper.find('.job-card-stack__empty').exists()).toBe(true)
+    expect(wrapper.find('.job-card-stack__loading').exists()).toBe(false)
+  })
 })
