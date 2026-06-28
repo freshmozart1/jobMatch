@@ -16,6 +16,7 @@ const safeUrl = computed(() => (props.sourceUrl.startsWith('https://') ? props.s
       target="_blank"
       rel="noopener noreferrer"
       :aria-label="`View job posting at ${company}`"
+      @pointerdown.stop
     >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
