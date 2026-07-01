@@ -13,6 +13,12 @@ const baseJob: ScrapedJob = {
   descriptionText: 'Some description.',
   scrapedAt: '2026-06-08T10:00:00.000Z',
   duplicateKey: 'linkedin:1001',
+  companyAddress: {
+    streetAddress: 'Musterstraße 1',
+    city: 'Hamburg',
+    postalCode: '20095',
+    countryCode: 'DE',
+  },
   embedding: [],
 }
 

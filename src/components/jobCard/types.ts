@@ -1,3 +1,10 @@
+export type CompanyAddress = {
+  streetAddress: string
+  city: string
+  postalCode: string
+  countryCode: string
+}
+
 export type ScrapedJob = {
   sourceHostname: string
   sourceJobId?: string
@@ -10,6 +17,7 @@ export type ScrapedJob = {
   scrapedAt: string
   tags?: string[]
   duplicateKey: string
+  companyAddress: CompanyAddress
   embedding: number[]
   match?: number
 }
