@@ -1,59 +1,49 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import { BrandBar, JobCardStack, MatchFilterBar } from "@/components";
-import ApplicationEditorPage from "./ApplicationEditorPage.vue";
-import MatchEmpty from "./MatchEmpty.vue";
-import SearchPage from "./SearchPage.vue";
-import type { ScrapedJob } from "@/components/jobCard/types";
-import { postJson } from "@/lib/api";
-import { DEFAULT_DATE_POSTED } from "./searchParams";
+import { computed, onMounted, ref, watch } from 'vue'
+import { BrandBar, JobCardStack, MatchFilterBar } from '@/components'
+import ApplicationEditorPage from './ApplicationEditorPage.vue'
+import MatchEmpty from './MatchEmpty.vue'
+import SearchPage from './SearchPage.vue'
+import type { ScrapedJob } from '@/components/jobCard/types'
+import { postJson } from '@/lib/api'
+import { DEFAULT_DATE_POSTED } from './searchParams'
 
-type LinkedInJobLinksByKeyword = Record<string, string[]>;
+type ScrapeJobResponseBody = Record<string, { searchUrl: string; jobs: ScrapedJob[] }>
 
-const jobs = ref<ScrapedJob[]>([]);
-const isLoading = ref(false);
-const errorMessage = ref<string | null>(null);
-const failedJobPageUrls = ref<string[]>([]);
-const matchFilterOn = ref(false);
-const matchThreshold = ref(50);
-const keywords = ref<string[]>(loadKeywords());
-const searchOpen = ref(false);
-const coverLetterOpen = ref(false);
-const activeJob = ref<ScrapedJob | null>(null);
+const jobs = ref<ScrapedJob[]>([])
+const isLoading = ref(false)
+const errorMessage = ref<string | null>(null)
+const matchFilterOn = ref(false)
+const matchThreshold = ref(50)
+const keywords = ref<string[]>(loadKeywords())
+const searchOpen = ref(false)
+const coverLetterOpen = ref(false)
+const activeJob = ref<ScrapedJob | null>(null)
 
-const matchEnabled = computed(() => keywords.value.length > 0);
+const matchEnabled = computed(() => keywords.value.length > 0)
 const visibleJobs = computed(() =>
   matchFilterOn.value
-    ? jobs.value.filter(
-        (job) => Math.round((job.match ?? 0) * 100) >= matchThreshold.value,
-      )
+    ? jobs.value.filter((job) => Math.round((job.match ?? 0) * 100) >= matchThreshold.value)
     : jobs.value,
-);
+)
 const emptyLabel = computed(() =>
-  matchFilterOn.value
-    ? `No jobs at or above ${matchThreshold.value}% match`
-    : "No more jobs",
-);
+  matchFilterOn.value ? `No jobs at or above ${matchThreshold.value}% match` : 'No more jobs',
+)
 
 function loadKeywords(): string[] {
   try {
-    const raw = window.localStorage.getItem("jobmatch.searchkeywords");
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed)
-      ? parsed.filter((k) => typeof k === "string").slice(0, 5)
-      : [];
+    const raw = window.localStorage.getItem('jobmatch.searchkeywords')
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string').slice(0, 5) : []
   } catch {
-    return [];
+    return []
   }
 }
 
 function updateKeywords(next: string[]): void {
-  keywords.value = next;
+  keywords.value = next
   try {
-    window.localStorage.setItem(
-      "jobmatch.searchkeywords",
-      JSON.stringify(next),
-    );
+    window.localStorage.setItem('jobmatch.searchkeywords', JSON.stringify(next))
   } catch {
     // ignore quota errors
   }
@@ -61,64 +51,65 @@ function updateKeywords(next: string[]): void {
 
 function getCity(): string {
   try {
-    return window.localStorage.getItem("jobmatch.searchcity") ?? "";
+    return window.localStorage.getItem('jobmatch.searchcity') ?? ''
   } catch {
-    return "";
+    return ''
   }
 }
 
 function getDistance(): number {
   try {
-    const raw = window.localStorage.getItem("jobmatch.searchdistance");
-    return raw ? Number(raw) || 25 : 25;
+    const raw = window.localStorage.getItem('jobmatch.searchdistance')
+    return raw ? Number(raw) || 25 : 25
   } catch {
-    return 25;
+    return 25
   }
 }
 
 function getDatePosted(): string {
   try {
-    return (
-      window.localStorage.getItem("jobmatch.searchdateposted") ||
-      DEFAULT_DATE_POSTED
-    );
+    return window.localStorage.getItem('jobmatch.searchdateposted') || DEFAULT_DATE_POSTED
   } catch {
-    return DEFAULT_DATE_POSTED;
+    return DEFAULT_DATE_POSTED
+  }
+}
+
+function getMaxPages(): number {
+  try {
+    const raw = window.localStorage.getItem('jobmatch.searchmaxpages')
+    return raw !== null ? parseInt(raw, 10) || 1 : 1
+  } catch {
+    return 1
   }
 }
 
 function openCoverLetter(job: ScrapedJob): void {
-  activeJob.value = job;
-  coverLetterOpen.value = true;
+  activeJob.value = job
+  coverLetterOpen.value = true
 }
 
 function closeCoverLetter(): void {
-  coverLetterOpen.value = false;
+  coverLetterOpen.value = false
 }
 
 async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
   try {
-    await postJson("/jobs/create", { job, like });
+    await postJson('/jobs/create', { job, like })
   } catch (error) {
-    console.error(
-      "Failed to create job:",
-      error instanceof Error ? error.message : error,
-    );
+    console.error('Failed to create job:', error instanceof Error ? error.message : error)
   }
 }
 
-const MAX_SCRAPE_CONCURRENCY = 2;
-let scrapeInFlight = 0;
-let scrapeGeneration = 0;
-const scrapeQueue: Array<() => void> = [];
-let scrapeAbortController: AbortController | null = null;
+let scrapeGeneration = 0
+let scrapeAbortController: AbortController | null = null
 
 let lastFetchedParams: {
-  keywords: string[];
-  city: string;
-  distance: number;
-  datePosted: string;
-} | null = null;
+  keywords: string[]
+  city: string
+  distance: number
+  datePosted: string
+  maxPages: number
+} | null = null
 
 function searchParamsChanged(): boolean {
   const cur = {
@@ -126,51 +117,17 @@ function searchParamsChanged(): boolean {
     city: getCity(),
     distance: getDistance(),
     datePosted: getDatePosted(),
-  };
-  if (!lastFetchedParams) return true;
+    maxPages: getMaxPages(),
+  }
+  if (!lastFetchedParams) return true
   return (
     cur.city !== lastFetchedParams.city ||
     cur.distance !== lastFetchedParams.distance ||
     cur.datePosted !== lastFetchedParams.datePosted ||
+    cur.maxPages !== lastFetchedParams.maxPages ||
     cur.keywords.length !== lastFetchedParams.keywords.length ||
     cur.keywords.some((k, i) => k !== lastFetchedParams!.keywords[i])
-  );
-}
-
-function drainScrapeQueue(): void {
-  while (scrapeInFlight < MAX_SCRAPE_CONCURRENCY && scrapeQueue.length > 0) {
-    scrapeInFlight++;
-    scrapeQueue.shift()!();
-  }
-}
-
-async function scrapeJobPage(url: string, signal: AbortSignal): Promise<void> {
-  const generation = scrapeGeneration;
-  await new Promise<void>((resolve) => {
-    scrapeQueue.push(resolve);
-    drainScrapeQueue();
-  });
-  if (generation !== scrapeGeneration) return;
-  try {
-    const scrapedJob = await postJson<ScrapedJob>(
-      "/scrape/linkedin/job-page",
-      { url },
-      signal,
-    );
-    // Stale result from a superseded search — discard silently; belongs to neither the old
-    // (already reset) nor the new search's jobs/failures.
-    if (generation !== scrapeGeneration) return;
-    jobs.value.push(scrapedJob);
-  } catch {
-    if (generation === scrapeGeneration) {
-      failedJobPageUrls.value.push(url);
-    }
-  } finally {
-    if (generation === scrapeGeneration) {
-      scrapeInFlight--;
-      drainScrapeQueue();
-    }
-  }
+  )
 }
 
 async function fetchJobs(): Promise<void> {
@@ -179,62 +136,50 @@ async function fetchJobs(): Promise<void> {
     city: getCity(),
     distance: getDistance(),
     datePosted: getDatePosted(),
-  };
-  scrapeAbortController?.abort();
-  scrapeAbortController = new AbortController();
-  scrapeGeneration++;
-  for (const resolve of scrapeQueue.splice(0)) resolve();
-  scrapeInFlight = 0;
-  // Capture local snapshots before the first await so a concurrent fetchJobs() call cannot
-  // overwrite scrapeAbortController or scrapeGeneration and corrupt this call's state.
-  const myGeneration = scrapeGeneration;
-  const signal = scrapeAbortController.signal;
-  isLoading.value = true;
-  jobs.value = [];
-  errorMessage.value = null;
-  failedJobPageUrls.value = [];
+    maxPages: getMaxPages(),
+  }
+  scrapeAbortController?.abort()
+  scrapeAbortController = new AbortController()
+  scrapeGeneration++
+  const myGeneration = scrapeGeneration
+  const signal = scrapeAbortController.signal
+  isLoading.value = true
+  jobs.value = []
+  errorMessage.value = null
 
   try {
-    const jobLinksByKeyword = await postJson<LinkedInJobLinksByKeyword>(
-      "/scrape/linkedin/job-links",
+    const result = await postJson<ScrapeJobResponseBody>(
+      '/scrape/linkedin/playwright',
       {
         keywords: keywords.value,
         location: getCity(),
         distance: getDistance(),
         datePosted: getDatePosted(),
+        maxPages: getMaxPages(),
       },
       signal,
-    );
-    if (scrapeGeneration !== myGeneration) return;
-    const filteredJobLinksByKeyword = await postJson<LinkedInJobLinksByKeyword>(
-      "/jobs/filter-job-links",
-      jobLinksByKeyword,
-      signal,
-    );
-    if (scrapeGeneration !== myGeneration) return;
-    const urls = [...new Set(Object.values(filteredJobLinksByKeyword).flat())];
-    await Promise.all(urls.map((url) => scrapeJobPage(url, signal)));
+    )
+    if (scrapeGeneration !== myGeneration) return
+    jobs.value = Object.values(result).flatMap(({ jobs }) => jobs)
   } catch (error) {
     if (scrapeGeneration === myGeneration) {
-      jobs.value = [];
-      errorMessage.value =
-        error instanceof Error ? error.message : "Failed to fetch jobs.";
+      jobs.value = []
+      errorMessage.value = error instanceof Error ? error.message : 'Failed to fetch jobs.'
     }
   } finally {
     if (scrapeGeneration === myGeneration) {
-      isLoading.value = false;
+      isLoading.value = false
     }
   }
 }
 
 onMounted(() => {
-  if (keywords.value.length > 0) void fetchJobs();
-});
+  if (keywords.value.length > 0) void fetchJobs()
+})
 
 watch(searchOpen, (open) => {
-  if (!open && keywords.value.length > 0 && searchParamsChanged())
-    void fetchJobs();
-});
+  if (!open && keywords.value.length > 0 && searchParamsChanged()) void fetchJobs()
+})
 </script>
 
 <template>
@@ -243,25 +188,10 @@ watch(searchOpen, (open) => {
 
     <MatchEmpty v-if="!matchEnabled" @open-search="searchOpen = true" />
     <template v-else>
-      <p
-        v-if="errorMessage"
-        class="match-page__status match-page__status--error"
-      >
+      <p v-if="errorMessage" class="match-page__status match-page__status--error">
         {{ errorMessage }}
       </p>
       <template v-else-if="jobs.length > 0 || !isLoading">
-        <p
-          v-if="isLoading && visibleJobs.length > 0"
-          class="match-page__status match-page__status--loading"
-        >
-          Loading more jobs...
-        </p>
-        <p
-          v-if="failedJobPageUrls.length > 0"
-          class="match-page__status match-page__status--warning"
-        >
-          {{ failedJobPageUrls.length }} job page request failed.
-        </p>
         <MatchFilterBar
           v-model:enabled="matchFilterOn"
           v-model:threshold="matchThreshold"
@@ -282,11 +212,7 @@ watch(searchOpen, (open) => {
     </template>
 
     <div :class="['overlay', { 'overlay--open': coverLetterOpen }]">
-      <ApplicationEditorPage
-        v-if="activeJob"
-        :job="activeJob"
-        @back="closeCoverLetter"
-      />
+      <ApplicationEditorPage v-if="activeJob" :job="activeJob" @back="closeCoverLetter" />
     </div>
 
     <div :class="['overlay', { 'overlay--open': searchOpen }]">

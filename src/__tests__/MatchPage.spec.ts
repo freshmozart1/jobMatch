@@ -47,8 +47,11 @@ const testJobs: ScrapedJob[] = [
   },
 ]
 
-const jobLinksByKeyword = {
-  'Full Stack Engineer': testJobs.map((job) => job.sourceUrl),
+const playwrightResponseBody = {
+  'Full Stack Engineer': {
+    searchUrl: 'https://www.linkedin.com/jobs/search?keywords=Full+Stack+Engineer',
+    jobs: testJobs,
+  },
 }
 
 function createJsonResponse(body: unknown, init: ResponseInit = {}) {
@@ -70,42 +73,17 @@ function createDeferred<T>() {
   return { promise, resolve, reject }
 }
 
-function buildFetchMock(
-  jobPageHandler: (jobUrl: string) => Promise<Response>,
-  jobLinksHandler?: () => Promise<Response>,
-) {
-  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+function mockFetch(playwrightHandler?: () => Promise<Response>) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = input.toString()
-    const requestBody = init?.body ? JSON.parse(init.body.toString()) : undefined
-
-    if (url.endsWith('/scrape/linkedin/job-links')) {
-      return jobLinksHandler ? jobLinksHandler() : createJsonResponse(jobLinksByKeyword)
+    if (url.endsWith('/scrape/linkedin/playwright')) {
+      return playwrightHandler ? playwrightHandler() : createJsonResponse(playwrightResponseBody)
     }
-    if (url.endsWith('/jobs/filter-job-links')) {
-      return createJsonResponse(requestBody)
+    if (url.endsWith('/jobs/create')) {
+      return createJsonResponse({})
     }
-    if (url.endsWith('/scrape/linkedin/job-page')) {
-      return jobPageHandler(requestBody?.url as string)
-    }
-
     return createJsonResponse({ error: 'Unexpected request.' }, { status: 500 })
   })
-}
-
-function mockFetchPipeline(options: { failedJobPageUrls?: string[] } = {}) {
-  const failedJobPageUrls = new Set(options.failedJobPageUrls ?? [])
-
-  const fetchMock = buildFetchMock(async (jobUrl) => {
-    if (failedJobPageUrls.has(jobUrl)) {
-      return createJsonResponse({ error: 'Failed to scrape job page.' }, { status: 502 })
-    }
-    const job = testJobs.find((candidate) => candidate.sourceUrl === jobUrl)
-    if (!job) {
-      return createJsonResponse({ error: 'Unknown test job.' }, { status: 404 })
-    }
-    return createJsonResponse(job)
-  })
-
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
@@ -151,20 +129,11 @@ async function swipeAllCards(wrapper: ReturnType<typeof mount>, expectedCount: n
   expect(swipeCount).toBe(expectedCount)
 }
 
-async function waitForJobPageCallCount(fetchMock: ReturnType<typeof vi.fn>, n: number) {
-  await vi.waitFor(() => {
-    const jobPageCalls = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin/job-page'),
-    )
-    expect(jobPageCalls).toHaveLength(n)
-  })
-}
-
 describe('MatchPage', () => {
   beforeEach(() => {
     window.localStorage.setItem('jobmatch.searchkeywords', JSON.stringify(['Full Stack Engineer']))
     window.localStorage.setItem('jobmatch.searchcity', 'Hamburg')
-    mockFetchPipeline()
+    mockFetch()
   })
 
   afterEach(() => {
@@ -172,13 +141,13 @@ describe('MatchPage', () => {
     window.localStorage.clear()
   })
 
-  it('fetches LinkedIn job links, filters them, and scrapes job pages', async () => {
-    const fetchMock = mockFetchPipeline()
+  it('calls /scrape/linkedin/playwright with the correct body', async () => {
+    const fetchMock = mockFetch()
 
     await mountLoadedMatchPage()
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3000/scrape/linkedin/job-links',
+      'http://localhost:3000/scrape/linkedin/playwright',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -186,21 +155,8 @@ describe('MatchPage', () => {
           location: 'Hamburg',
           distance: 25,
           datePosted: '86400',
+          maxPages: 1,
         }),
-      }),
-    )
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3000/jobs/filter-job-links',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify(jobLinksByKeyword),
-      }),
-    )
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3000/scrape/linkedin/job-page',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ url: testJobs[0]!.sourceUrl }),
       }),
     )
   })
@@ -213,145 +169,88 @@ describe('MatchPage', () => {
     expect(container.props('job')).toMatchObject({ title: testJobs[0]!.title })
   })
 
-  it('does not add a stale scrape result to jobs when a new search has started', async () => {
-    const staleJobDeferred = createDeferred<Response>()
-    let jobLinksCallCount = 0
-
-    vi.stubGlobal(
-      'fetch',
-      buildFetchMock(
-        async (jobUrl) => {
-          // Only defer job1 during the first search; resolve it immediately for the second.
-          if (jobUrl === testJobs[0]!.sourceUrl && jobLinksCallCount === 1) {
-            return staleJobDeferred.promise
-          }
-          const job = testJobs.find((j) => j.sourceUrl === jobUrl)
-          return createJsonResponse(job ?? { error: 'Unknown' })
-        },
-        async () => {
-          jobLinksCallCount++
-          return createJsonResponse(jobLinksByKeyword)
-        },
-      ),
-    )
-
-    const wrapper = mount(MatchPage)
-
-    // Wait for job2 to appear — first search is still waiting for job1.
-    await vi.waitFor(() => {
-      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
-    })
-
-    // Trigger a second fetchJobs via the searchOpen watcher.
-    // Change keywords so searchParamsChanged() returns true and the watcher fires fetchJobs().
-    await triggerSearchUpdate(wrapper, ['Backend Developer'])
-
-    // Wait for the second job-links call to confirm the new search is running.
-    await vi.waitFor(() => {
-      expect(jobLinksCallCount).toBe(2)
-    })
-
-    // Wait for the second search's jobs to appear.
-    await vi.waitFor(() => {
-      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
-    })
-
-    // Resolve the stale first-search job1 response — generation guard must discard it.
-    staleJobDeferred.resolve(createJsonResponse(testJobs[0]))
-    await wrapper.vm.$nextTick()
-    await wrapper.vm.$nextTick()
-
-    // Swipe through all cards: count must be testJobs.length, not testJobs.length + 1.
-    await swipeAllCards(wrapper, testJobs.length)
-  })
-
-  it('passes an AbortSignal to job-page scrape requests', async () => {
-    const fetchMock = mockFetchPipeline()
+  it('passes an AbortSignal to the playwright scrape request', async () => {
+    const fetchMock = mockFetch()
 
     await mountLoadedMatchPage()
 
-    const jobPageCalls = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin/job-page'),
+    const playwrightCall = fetchMock.mock.calls.find((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/playwright'),
     )
-    expect(jobPageCalls.length).toBeGreaterThan(0)
-    for (const [, init] of jobPageCalls) {
-      expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal)
-    }
+    expect(playwrightCall).toBeDefined()
+    const init = (playwrightCall as unknown as [unknown, RequestInit])[1]
+    expect(init.signal).toBeInstanceOf(AbortSignal)
   })
 
-  it('does not scrape stale job-links results when a new search supersedes the first', async () => {
-    const staleJobLinksDeferred = createDeferred<Response>()
-    let jobLinksCallCount = 0
+  it('discards a stale playwright response when a new search supersedes it', async () => {
+    const staleDeferred = createDeferred<Response>()
+    let playwrightCallCount = 0
 
     vi.stubGlobal(
       'fetch',
-      buildFetchMock(
-        async (jobUrl) => {
-          const job = testJobs.find((j) => j.sourceUrl === jobUrl)
-          return createJsonResponse(job ?? { error: 'Unknown' })
-        },
-        async () => {
-          jobLinksCallCount++
-          if (jobLinksCallCount === 1) return staleJobLinksDeferred.promise
-          return createJsonResponse(jobLinksByKeyword)
-        },
-      ),
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (input.toString().endsWith('/scrape/linkedin/playwright')) {
+          playwrightCallCount++
+          if (playwrightCallCount === 1) return staleDeferred.promise
+          return createJsonResponse(playwrightResponseBody)
+        }
+        return createJsonResponse({})
+      }),
     )
 
     const wrapper = mount(MatchPage)
 
-    // First fetchJobs is hanging at job-links. Trigger a second search by changing keywords.
+    // Trigger a second search while the first is still pending.
     await triggerSearchUpdate(wrapper, ['Backend Developer'])
 
-    // Wait for the second job-links call to confirm the new search is running.
     await vi.waitFor(() => {
-      expect(jobLinksCallCount).toBe(2)
+      expect(playwrightCallCount).toBe(2)
     })
 
-    // Wait for the second search's jobs to appear.
+    // Second search resolves — its jobs appear.
     await vi.waitFor(() => {
       expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
     })
 
-    // Resolve the stale first-search job-links — fetchJobs generation guard must discard it.
-    staleJobLinksDeferred.resolve(createJsonResponse(jobLinksByKeyword))
+    // Resolve the stale first response — generation guard must discard it.
+    staleDeferred.resolve(createJsonResponse(playwrightResponseBody))
     await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
 
-    // Swipe through all cards: count must be testJobs.length, not testJobs.length * 2.
+    // Swipe count must equal testJobs.length, not doubled.
     await swipeAllCards(wrapper, testJobs.length)
   })
 
   it('does not re-fetch jobs when the search panel is closed without changing any parameters', async () => {
-    const fetchMock = mockFetchPipeline()
+    const fetchMock = mockFetch()
 
     const wrapper = await mountLoadedMatchPage()
 
-    const jobLinksCallsBefore = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin/job-links'),
+    const callsBefore = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/playwright'),
     ).length
 
-    // Open and immediately close the search panel without modifying keywords, city, or distance.
+    // Open and immediately close the search panel without modifying any params.
     wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search')
     await wrapper.vm.$nextTick()
     wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back')
     await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
 
-    const jobLinksCallsAfter = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin/job-links'),
+    const callsAfter = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/playwright'),
     ).length
 
-    expect(jobLinksCallsAfter).toBe(jobLinksCallsBefore)
+    expect(callsAfter).toBe(callsBefore)
   })
 
   it('re-fetches jobs when the datePosted filter changes between search-panel opens', async () => {
-    const fetchMock = mockFetchPipeline()
+    const fetchMock = mockFetch()
 
     const wrapper = await mountLoadedMatchPage()
 
-    const jobLinksCallsBefore = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin/job-links'),
+    const callsBefore = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/playwright'),
     ).length
 
     // Change datePosted in localStorage to simulate the user changing the dropdown.
@@ -364,111 +263,35 @@ describe('MatchPage', () => {
     await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
 
-    const jobLinksCallsAfter = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin/job-links'),
+    const callsAfter = fetchMock.mock.calls.filter((args) =>
+      args[0]!.toString().endsWith('/scrape/linkedin/playwright'),
     ).length
 
-    expect(jobLinksCallsAfter).toBe(jobLinksCallsBefore + 1)
+    expect(callsAfter).toBe(callsBefore + 1)
   })
 
-  it('limits concurrent job page scrape requests to 2 at a time', async () => {
-    const thirdJob: ScrapedJob = {
-      sourceHostname: 'de.linkedin.com',
-      sourceJobId: '1003',
-      sourceUrl: 'https://de.linkedin.com/jobs/view/backend-engineer-1003/',
-      title: 'Backend Engineer',
-      company: 'Third GmbH',
-      location: 'Hamburg',
-      descriptionText: 'Build backend features.',
-      scrapedAt: '2026-06-08T12:00:00.000Z',
-      duplicateKey: 'linkedin:1003',
-      companyAddress: {
-        streetAddress: 'Musterstraße 1',
-        city: 'Hamburg',
-        postalCode: '20095',
-        countryCode: 'DE',
-      },
-      embedding: [],
-    }
-
-    const deferredResponses = new Map([
-      [testJobs[0]!.sourceUrl, createDeferred<Response>()],
-      [testJobs[1]!.sourceUrl, createDeferred<Response>()],
-      [thirdJob.sourceUrl, createDeferred<Response>()],
-    ])
-
-    const allThreeJobs = [...testJobs, thirdJob]
-    const jobLinksByKeywordWithThree = {
-      'Full Stack Engineer': allThreeJobs.map((job) => job.sourceUrl),
-    }
-
-    const fetchMock = buildFetchMock(
-      async (jobUrl) => {
-        const deferred = deferredResponses.get(jobUrl)
-        if (!deferred) return createJsonResponse({ error: 'Unknown URL' }, { status: 404 })
-        return deferred.promise
-      },
-      async () => createJsonResponse(jobLinksByKeywordWithThree),
+  it('shows the loading placeholder while the playwright request is pending', async () => {
+    const deferred = createDeferred<Response>()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (input.toString().endsWith('/scrape/linkedin/playwright')) return deferred.promise
+        return createJsonResponse({})
+      }),
     )
-    vi.stubGlobal('fetch', fetchMock)
-
-    mount(MatchPage)
-
-    // Wait until exactly 2 job-page scrape requests are in-flight (+ 2 pipeline calls = 4 total).
-    await waitForJobPageCallCount(fetchMock, 2)
-
-    // The third URL must NOT have been requested yet.
-    const jobPageUrls = fetchMock.mock.calls
-      .filter((args) => args[0]!.toString().endsWith('/scrape/linkedin/job-page'))
-      .map((args) => JSON.parse((args[1] as RequestInit).body!.toString()).url as string)
-    expect(jobPageUrls).not.toContain(thirdJob.sourceUrl)
-
-    // Resolve the first — the third must now start.
-    deferredResponses.get(testJobs[0]!.sourceUrl)!.resolve(createJsonResponse(testJobs[0]))
-    await waitForJobPageCallCount(fetchMock, 3)
-
-    // Clean up remaining deferred promises.
-    deferredResponses.get(testJobs[1]!.sourceUrl)!.resolve(createJsonResponse(testJobs[1]))
-    deferredResponses.get(thirdJob.sourceUrl)!.resolve(createJsonResponse(thirdJob))
-  })
-
-  it('renders a scraped job while later job page requests are still pending', async () => {
-    const firstJobPageResponse = createDeferred<Response>()
-    const secondJobPageResponse = createDeferred<Response>()
-    const jobPageResponses = new Map([
-      [testJobs[0]!.sourceUrl, firstJobPageResponse],
-      [testJobs[1]!.sourceUrl, secondJobPageResponse],
-    ])
-    const fetchMock = buildFetchMock(async (jobUrl) => {
-      const response = jobPageResponses.get(jobUrl)
-      if (!response) {
-        return createJsonResponse({ error: 'Unknown test job.' }, { status: 404 })
-      }
-      return response.promise
-    })
-    vi.stubGlobal('fetch', fetchMock)
 
     const wrapper = mount(MatchPage)
 
-    await vi.waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(4)
-    })
+    // Jobs not yet available — shows loading placeholder.
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.match-page__status').text()).toBe('Loading jobs...')
+    expect(wrapper.findComponent(JobCardContainer).exists()).toBe(false)
 
-    firstJobPageResponse.resolve(createJsonResponse(testJobs[0]))
-
-    await vi.waitFor(() => {
-      expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
-        title: testJobs[0]!.title,
-      })
-    })
-    expect(wrapper.find('.match-page__status--loading').text()).toBe('Loading more jobs...')
-    expect(wrapper.find('.job-card-stack__next').exists()).toBe(false)
-
-    secondJobPageResponse.resolve(createJsonResponse(testJobs[1]))
+    // Resolve the playwright response — card stack appears.
+    deferred.resolve(createJsonResponse(playwrightResponseBody))
 
     await vi.waitFor(() => {
-      expect(wrapper.find('.match-page__status--loading').exists()).toBe(false)
-      expect(wrapper.find('.job-card-stack__next').exists()).toBe(true)
+      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
     })
   })
 
@@ -555,47 +378,6 @@ describe('MatchPage', () => {
 
     expect(wrapper.find('.job-card-stack__current').exists()).toBe(false)
     expect(wrapper.find('.job-card-stack__empty').text()).toBe('No more jobs')
-  })
-
-  it('shows a loading indicator in the card stack after all visible jobs are swiped while loading is still in progress', async () => {
-    const secondJobDeferred = createDeferred<Response>()
-    const fetchMock = buildFetchMock(async (jobUrl) => {
-      if (jobUrl === testJobs[1]!.sourceUrl) return secondJobDeferred.promise
-      const job = testJobs.find((j) => j.sourceUrl === jobUrl)
-      return createJsonResponse(job ?? { error: 'Unknown test job.' })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const wrapper = mount(MatchPage)
-
-    await vi.waitFor(() => {
-      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
-    })
-
-    swipeTopCard(wrapper)
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.find('.job-card-stack__loading').exists()).toBe(true)
-    expect(wrapper.find('.job-card-stack__empty').exists()).toBe(false)
-
-    secondJobDeferred.resolve(createJsonResponse(testJobs[1]))
-
-    await vi.waitFor(() => {
-      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
-    })
-
-    expect(wrapper.find('.job-card-stack__loading').exists()).toBe(false)
-  })
-
-  it('renders successful jobs when one job page request fails', async () => {
-    mockFetchPipeline({ failedJobPageUrls: [testJobs[1]!.sourceUrl] })
-
-    const wrapper = await mountLoadedMatchPage()
-
-    expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
-      title: testJobs[0]!.title,
-    })
-    expect(wrapper.find('.match-page__status--warning').text()).toBe('1 job page request failed.')
   })
 
   it('shows the match score for the top card as a percentage', async () => {
