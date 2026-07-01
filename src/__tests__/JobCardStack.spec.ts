@@ -13,6 +13,12 @@ function createJob(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
     company: 'A Company',
     scrapedAt: '2026-06-02T14:42:54.764Z',
     duplicateKey: 'linkedin:1',
+    companyAddress: {
+      streetAddress: 'Musterstraße 1',
+      city: 'Hamburg',
+      postalCode: '20095',
+      countryCode: 'DE',
+    },
     embedding: [],
     ...overrides,
   }

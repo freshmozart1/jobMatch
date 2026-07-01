@@ -2,26 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import { JobCard } from '@/components'
+import type { ScrapedJob } from '@/components/jobCard/types'
 
-type JobCardProps = {
-  job: {
-    sourceHostname: string
-    sourceJobId?: string
-    sourceUrl: string
-    title: string
-    company: string
-    location?: string
-    descriptionText?: string
-    postedAt?: string
-    scrapedAt: string
-    tags?: string[]
-    duplicateKey: string
-    embedding: number[]
-    match?: number
-  }
-}
-
-function createJob(overrides: Partial<JobCardProps['job']> = {}): JobCardProps['job'] {
+function createJob(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
   return {
     sourceHostname: 'de.linkedin.com',
     sourceJobId: '4422110097',
@@ -34,6 +17,12 @@ function createJob(overrides: Partial<JobCardProps['job']> = {}): JobCardProps['
     scrapedAt: '2026-06-02T14:42:54.764Z',
     tags: ['Berufseinstieg', 'Vollzeit', 'Ingenieurwesen und IT', 'Einzelhandel'],
     duplicateKey: 'linkedin:4422110097',
+    companyAddress: {
+      streetAddress: 'Musterstraße 1',
+      city: 'Hamburg',
+      postalCode: '20095',
+      countryCode: 'DE',
+    },
     embedding: [],
     ...overrides,
   }

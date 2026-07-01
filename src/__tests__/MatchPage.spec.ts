@@ -17,6 +17,12 @@ const testJobs: ScrapedJob[] = [
     descriptionText: 'Build product features.',
     scrapedAt: '2026-06-08T10:00:00.000Z',
     duplicateKey: 'linkedin:1001',
+    companyAddress: {
+      streetAddress: 'Musterstraße 1',
+      city: 'Hamburg',
+      postalCode: '20095',
+      countryCode: 'DE',
+    },
     embedding: [],
     match: 0.9,
   },
@@ -30,6 +36,12 @@ const testJobs: ScrapedJob[] = [
     descriptionText: 'Build UI features.',
     scrapedAt: '2026-06-08T11:00:00.000Z',
     duplicateKey: 'linkedin:1002',
+    companyAddress: {
+      streetAddress: 'Musterstraße 1',
+      city: 'Hamburg',
+      postalCode: '20095',
+      countryCode: 'DE',
+    },
     embedding: [],
     match: 0.3,
   },
@@ -370,6 +382,12 @@ describe('MatchPage', () => {
       descriptionText: 'Build backend features.',
       scrapedAt: '2026-06-08T12:00:00.000Z',
       duplicateKey: 'linkedin:1003',
+      companyAddress: {
+        streetAddress: 'Musterstraße 1',
+        city: 'Hamburg',
+        postalCode: '20095',
+        countryCode: 'DE',
+      },
       embedding: [],
     }
 
