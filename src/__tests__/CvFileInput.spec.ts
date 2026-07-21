@@ -27,8 +27,32 @@ describe('CvFileInput', () => {
       const wrapper = mount(CvFileInput, { props: { uploaded: false } })
       const input = wrapper.find('input[type="file"]').element as HTMLInputElement
       const clickSpy = vi.spyOn(input, 'click').mockImplementation(() => {})
-      await wrapper.find('.cl-action').trigger('click')
+      await wrapper.find('.cl-action__row').trigger('click')
       expect(clickSpy).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('download button', () => {
+    it('is disabled when uploaded is false', () => {
+      const wrapper = mount(CvFileInput, { props: { uploaded: false } })
+      expect((wrapper.find('.cl-action__dl').element as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it('is enabled when uploaded is true', () => {
+      const wrapper = mount(CvFileInput, { props: { uploaded: true } })
+      expect((wrapper.find('.cl-action__dl').element as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it('emits "download" when clicked and uploaded is true', async () => {
+      const wrapper = mount(CvFileInput, { props: { uploaded: true } })
+      await wrapper.find('.cl-action__dl').trigger('click')
+      expect(wrapper.emitted('download')).toBeTruthy()
+    })
+
+    it('does not emit "download" when the button is disabled', async () => {
+      const wrapper = mount(CvFileInput, { props: { uploaded: false } })
+      await wrapper.find('.cl-action__dl').trigger('click')
+      expect(wrapper.emitted('download')).toBeFalsy()
     })
   })
 

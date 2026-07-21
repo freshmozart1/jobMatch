@@ -62,7 +62,7 @@ describe('ApplicationEditorPage', () => {
     if (draftText !== undefined)
       window.localStorage.setItem('jobmatch.coverletter.linkedin:1001', draftText)
     const wrapper = mount(ApplicationEditorPage, { props: { job } })
-    await wrapper.find('.cl-action').trigger('click')
+    await wrapper.find('.cl-action__row').trigger('click')
     return wrapper
   }
 
@@ -80,6 +80,38 @@ describe('ApplicationEditorPage', () => {
     const urls = getCalledUrls()
     expect(urls.some((u) => u.includes('/jobs/create'))).toBe(expectedJobs)
     expect(urls.some((u) => u.includes('/cover-letters/upload/text'))).toBe(expectedCoverLetter)
+  }
+
+  function makeDownloadMocks() {
+    const createObjectURL = vi.fn(() => 'blob:fake')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+    const anchorClick = vi.fn()
+    let capturedAnchor: HTMLAnchorElement | null = null
+    const originalCreate = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      if (tag === 'a') {
+        const a = originalCreate('a')
+        a.click = anchorClick
+        capturedAnchor = a
+        return a
+      }
+      return originalCreate(tag)
+    })
+    return {
+      createObjectURL,
+      revokeObjectURL,
+      anchorClick,
+      getAnchor: () => capturedAnchor,
+      restore: () => {
+        vi.restoreAllMocks()
+        vi.unstubAllGlobals()
+      },
+    }
+  }
+
+  function seedDraft() {
+    window.localStorage.setItem('jobmatch.coverletter.linkedin:1001', 'My cover letter draft')
   }
 
   // --- menu view ---
@@ -120,7 +152,7 @@ describe('ApplicationEditorPage', () => {
     expect(wrapper.find('.cl-action .cl-action__sub').text()).toBe('Draft written')
   })
 
-  it('disables the download button when no CV has been uploaded', async () => {
+  it('disables the download button when neither a CV nor a cover letter draft exists', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 404 })))
     const wrapper = mount(ApplicationEditorPage, { props: { job } })
     await flushPromises()
@@ -128,6 +160,14 @@ describe('ApplicationEditorPage', () => {
   })
 
   it('enables the download button after the server confirms a CV exists', async () => {
+    const wrapper = mount(ApplicationEditorPage, { props: { job } })
+    await flushPromises()
+    expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('enables the download button when a cover letter draft exists, even without a CV', async () => {
+    window.localStorage.setItem('jobmatch.coverletter.linkedin:1001', 'My cover letter draft')
+    fetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 404 })))
     const wrapper = mount(ApplicationEditorPage, { props: { job } })
     await flushPromises()
     expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
@@ -307,36 +347,12 @@ describe('ApplicationEditorPage', () => {
 
   // --- download application ---
 
+  // The combined PDF is only downloaded once both a cover letter draft and a CV
+  // exist — every test in this block seeds a draft so cvUploaded (true by
+  // default via the mocked CV status check) and letterDone are both true.
   describe('download application', () => {
-    function makeDownloadMocks() {
-      const createObjectURL = vi.fn(() => 'blob:fake')
-      const revokeObjectURL = vi.fn()
-      vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
-      const anchorClick = vi.fn()
-      let capturedAnchor: HTMLAnchorElement | null = null
-      const originalCreate = document.createElement.bind(document)
-      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-        if (tag === 'a') {
-          const a = originalCreate('a')
-          a.click = anchorClick
-          capturedAnchor = a
-          return a
-        }
-        return originalCreate(tag)
-      })
-      return {
-        createObjectURL,
-        revokeObjectURL,
-        anchorClick,
-        getAnchor: () => capturedAnchor,
-        restore: () => {
-          vi.restoreAllMocks()
-          vi.unstubAllGlobals()
-        },
-      }
-    }
-
     async function mountAndClickDownload() {
+      seedDraft()
       const mocks = makeDownloadMocks()
       const wrapper = mount(ApplicationEditorPage, { props: { job } })
       await flushPromises()
@@ -376,6 +392,7 @@ describe('ApplicationEditorPage', () => {
     })
 
     it('ignores a second click while a download is already in progress', async () => {
+      seedDraft()
       const { anchorClick, restore } = makeDownloadMocks()
 
       let resolveFirst!: () => void
@@ -420,6 +437,7 @@ describe('ApplicationEditorPage', () => {
     })
 
     it('aborts the in-flight fetch when the component unmounts', async () => {
+      seedDraft()
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
       let rejectFetch!: (reason: unknown) => void
@@ -453,6 +471,7 @@ describe('ApplicationEditorPage', () => {
     })
 
     it('logs to console.error when the download request fails', async () => {
+      seedDraft()
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
       fetchMock
         .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
@@ -472,6 +491,243 @@ describe('ApplicationEditorPage', () => {
         'Failed to download application:',
         'Cover letter not found',
       )
+      consoleError.mockRestore()
+    })
+  })
+
+  describe('download application — only one document exists', () => {
+    it('downloads only the cover letter when a draft exists but no CV is uploaded', async () => {
+      seedDraft()
+      const { anchorClick, getAnchor, restore } = makeDownloadMocks()
+      fetchMock.mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 404 }))) // CV status — no CV
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+
+      const urls = getCalledUrls()
+      expect(urls.some((u) => u.includes('/cover-letters/linkedin:1001'))).toBe(true)
+      expect(urls.some((u) => u.includes('/application/'))).toBe(false)
+      expect(anchorClick).toHaveBeenCalled()
+      expect(getAnchor()?.download).toBe('cover-letter-linkedin-1001.pdf')
+
+      restore()
+    })
+
+    it('downloads only the CV when uploaded but no cover letter draft exists', async () => {
+      const { anchorClick, getAnchor, restore } = makeDownloadMocks()
+      // beforeEach's default fetch mock resolves 200 for everything, so the
+      // CV status check succeeds (cvUploaded true); no draft means letterDone stays false.
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+
+      await wrapper.find('.cl-download').trigger('click')
+      await flushPromises()
+
+      const urls = getCalledUrls()
+      expect(urls.some((u) => u.endsWith('/cv/linkedin:1001'))).toBe(true)
+      expect(urls.some((u) => u.includes('/application/'))).toBe(false)
+      expect(anchorClick).toHaveBeenCalled()
+      expect(getAnchor()?.download).toBe('cv-linkedin-1001.pdf')
+
+      restore()
+    })
+  })
+
+  // --- download cover letter (per-row) ---
+
+  describe('download cover letter', () => {
+    async function mountAndClickCoverLetterDownload() {
+      seedDraft()
+      const mocks = makeDownloadMocks()
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+      await wrapper.findAll('.cl-action__dl')[0]!.trigger('click')
+      await flushPromises()
+      return { wrapper, ...mocks }
+    }
+
+    it('calls GET /cover-letters/:duplicateKey when the row download button is clicked', async () => {
+      const { anchorClick, revokeObjectURL, getAnchor, restore } =
+        await mountAndClickCoverLetterDownload()
+
+      const urls = getCalledUrls()
+      expect(urls.some((u) => u.includes('/cover-letters/linkedin:1001'))).toBe(true)
+      expect(anchorClick).toHaveBeenCalled()
+      expect(getAnchor()?.download).toBe('cover-letter-linkedin-1001.pdf')
+
+      await vi.runAllTimersAsync()
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake')
+
+      restore()
+    })
+
+    it('ignores a second click while a download is already in progress', async () => {
+      seedDraft()
+      const { anchorClick, restore } = makeDownloadMocks()
+
+      let resolveFirst!: () => void
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((res) => {
+              resolveFirst = () => res(new Response(new Blob(['%PDF']), { status: 200 }))
+            }),
+        ) // first download — held pending
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      const dlButton = wrapper.findAll('.cl-action__dl')[0]!
+      dlButton.trigger('click')
+      await dlButton.trigger('click')
+
+      resolveFirst()
+      await flushPromises()
+
+      const downloadCalls = fetchMock.mock.calls.filter((c: unknown[]) =>
+        (c[0] as string).includes('/cover-letters/linkedin:1001'),
+      )
+      expect(downloadCalls).toHaveLength(1)
+      expect(anchorClick).toHaveBeenCalledTimes(1)
+
+      restore()
+    })
+
+    it('suppresses the AbortError console log when the component unmounts mid-download', async () => {
+      seedDraft()
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      let rejectFetch!: (reason: unknown) => void
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((_, rej) => {
+              rejectFetch = rej
+            }),
+        )
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      wrapper.findAll('.cl-action__dl')[0]!.trigger('click')
+      wrapper.unmount()
+
+      rejectFetch(new DOMException('Aborted', 'AbortError'))
+      await flushPromises()
+
+      expect(consoleError).not.toHaveBeenCalledWith(
+        'Failed to download cover letter:',
+        expect.anything(),
+      )
+
+      consoleError.mockRestore()
+    })
+  })
+
+  // --- download cv (per-row) ---
+
+  describe('download cv', () => {
+    async function mountAndClickCvDownload() {
+      const mocks = makeDownloadMocks()
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+      fetchMock.mockClear()
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(new Response(new Blob(['%PDF']), { status: 200 })),
+      )
+      await wrapper.findAll('.cl-action__dl')[1]!.trigger('click')
+      await flushPromises()
+      return { wrapper, ...mocks }
+    }
+
+    it('calls GET /cv/:duplicateKey when the row download button is clicked', async () => {
+      const { anchorClick, revokeObjectURL, getAnchor, restore } = await mountAndClickCvDownload()
+
+      const urls = getCalledUrls()
+      expect(urls.some((u) => u.endsWith('/cv/linkedin:1001'))).toBe(true)
+      expect(anchorClick).toHaveBeenCalled()
+      expect(getAnchor()?.download).toBe('cv-linkedin-1001.pdf')
+
+      await vi.runAllTimersAsync()
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake')
+
+      restore()
+    })
+
+    it('ignores a second click while a download is already in progress', async () => {
+      const { anchorClick, restore } = makeDownloadMocks()
+
+      let resolveFirst!: () => void
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((res) => {
+              resolveFirst = () => res(new Response(new Blob(['%PDF']), { status: 200 }))
+            }),
+        ) // first download — held pending
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      const dlButton = wrapper.findAll('.cl-action__dl')[1]!
+      dlButton.trigger('click')
+      await dlButton.trigger('click')
+
+      resolveFirst()
+      await flushPromises()
+
+      // .endsWith excludes the /cv/:key/status call fired on mount, which
+      // otherwise shares the '/cv/linkedin:1001' prefix with the download call.
+      const downloadCalls = fetchMock.mock.calls.filter((c: unknown[]) =>
+        (c[0] as string).endsWith('/cv/linkedin:1001'),
+      )
+      expect(downloadCalls).toHaveLength(1)
+      expect(anchorClick).toHaveBeenCalledTimes(1)
+
+      restore()
+    })
+
+    it('suppresses the AbortError console log when the component unmounts mid-download', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      let rejectFetch!: (reason: unknown) => void
+      fetchMock
+        .mockImplementationOnce(() => Promise.resolve(new Response('{}', { status: 200 }))) // CV status
+        .mockImplementationOnce(
+          () =>
+            new Promise<Response>((_, rej) => {
+              rejectFetch = rej
+            }),
+        )
+
+      const wrapper = mount(ApplicationEditorPage, { props: { job } })
+      await flushPromises()
+
+      wrapper.findAll('.cl-action__dl')[1]!.trigger('click')
+      wrapper.unmount()
+
+      rejectFetch(new DOMException('Aborted', 'AbortError'))
+      await flushPromises()
+
+      expect(consoleError).not.toHaveBeenCalledWith('Failed to download CV:', expect.anything())
+
       consoleError.mockRestore()
     })
   })

@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 
 defineProps<{ uploaded: boolean }>()
-const emit = defineEmits<{ fileSelected: [file: File] }>()
+const emit = defineEmits<{ fileSelected: [file: File]; download: [] }>()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
@@ -18,11 +18,42 @@ function onChange(event: Event) {
 </script>
 
 <template>
-  <button type="button" class="cl-action" @click="openFilePicker">
-    <span class="cl-action__icon">
+  <div class="cl-action">
+    <button type="button" class="cl-action__row" @click="openFilePicker">
+      <span class="cl-action__icon">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 15V4M12 4L8 8M12 4l4 4"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+      <span class="cl-action__text">
+        <span class="cl-action__title">Curriculum Vitae</span>
+        <span class="cl-action__sub">{{ uploaded ? 'PDF attached' : 'Attach a PDF file' }}</span>
+      </span>
+    </button>
+    <button
+      type="button"
+      class="cl-action__dl"
+      :disabled="!uploaded"
+      aria-label="Download CV"
+      title="Download CV"
+      @click="$emit('download')"
+    >
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
-          d="M12 15V4M12 4L8 8M12 4l4 4"
+          d="M12 4v11M12 15l-4-4M12 15l4-4"
           stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
@@ -36,21 +67,8 @@ function onChange(event: Event) {
           stroke-linejoin="round"
         />
       </svg>
-    </span>
-    <span class="cl-action__text">
-      <span class="cl-action__title">Curriculum Vitae</span>
-      <span class="cl-action__sub">{{ uploaded ? 'PDF attached' : 'Attach a PDF file' }}</span>
-    </span>
-    <span :class="['cl-action__check', { 'cl-action__check--on': uploaded }]">
-      <svg v-if="uploaded" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="currentColor" />
-        <path d="M7.4 12.2l3 3 6.2-6.6" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="2" />
-      </svg>
-    </span>
-  </button>
+    </button>
+  </div>
 
   <input
     ref="fileInputRef"
@@ -65,7 +83,7 @@ function onChange(event: Event) {
 .cl-action {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   width: 100%;
   box-sizing: border-box;
   padding: 16px;
@@ -74,17 +92,60 @@ function onChange(event: Event) {
   background: #fff;
   color: var(--text-color);
   font-family: 'Inter', sans-serif;
-  cursor: pointer;
+}
+
+.cl-action__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
   text-align: left;
-  transition:
-    box-shadow 0.15s ease,
-    transform 0.1s ease;
+  cursor: pointer;
+  transition: transform 0.1s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.cl-action:active {
+.cl-action__row:active {
   transform: scale(0.99);
-  box-shadow: 2px 2px 8px 0 var(--box-shadow-color);
+}
+
+.cl-action__dl {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cl-action__dl:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.cl-action__dl:disabled {
+  color: rgba(0, 0, 0, 0.22);
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  cursor: default;
+}
+
+.cl-action__dl svg {
+  width: 20px;
+  height: 20px;
 }
 
 .cl-action__icon {
@@ -121,23 +182,5 @@ function onChange(event: Event) {
   font-size: 12px;
   font-weight: 500;
   color: var(--border-color);
-}
-
-.cl-action__check {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  color: rgba(0, 0, 0, 0.28);
-}
-
-.cl-action__check svg {
-  width: 24px;
-  height: 24px;
-}
-
-.cl-action__check--on {
-  color: var(--accents-green);
 }
 </style>
