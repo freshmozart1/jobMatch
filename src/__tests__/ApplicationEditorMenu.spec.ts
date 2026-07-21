@@ -40,7 +40,7 @@ describe('ApplicationEditorMenu', () => {
   describe('cover letter action', () => {
     it('emits "openLetter" when the cover letter action is clicked', async () => {
       const wrapper = mountMenu()
-      await wrapper.findAll('.cl-action')[0]!.trigger('click')
+      await wrapper.findAll('.cl-action__row')[0]!.trigger('click')
       expect(wrapper.emitted('openLetter')).toBeTruthy()
     })
   })
@@ -52,6 +52,20 @@ describe('ApplicationEditorMenu', () => {
       await wrapper.findComponent(CvFileInput).vm.$emit('fileSelected', file)
       expect(wrapper.emitted('fileSelected')).toBeTruthy()
       expect(wrapper.emitted('fileSelected')![0]).toEqual([file])
+    })
+  })
+
+  describe('per-row downloads', () => {
+    it('re-emits "downloadCoverLetter" when the cover letter row\'s download button is clicked', async () => {
+      const wrapper = mountMenu({ letterDone: true })
+      await wrapper.findAll('.cl-action__dl')[0]!.trigger('click')
+      expect(wrapper.emitted('downloadCoverLetter')).toBeTruthy()
+    })
+
+    it('re-emits "downloadCv" when the CV row\'s download button is clicked', async () => {
+      const wrapper = mountMenu({ cvUploaded: true })
+      await wrapper.findAll('.cl-action__dl')[1]!.trigger('click')
+      expect(wrapper.emitted('downloadCv')).toBeTruthy()
     })
   })
 })

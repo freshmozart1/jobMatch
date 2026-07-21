@@ -26,10 +26,60 @@ const saveStatus = ref<SaveStatus>('idle')
 const lastUploadedText = ref<string | null>(null)
 let uploadTimer: ReturnType<typeof setTimeout> | null = null
 let uploadInFlight = false
-let downloadInFlight = false
-let downloadAbortController: AbortController | null = null
-let downloadCleanupTimer: ReturnType<typeof setTimeout> | null = null
-let pendingDownloadRevoke: (() => void) | null = null
+
+// Fetches a blob, triggers a browser download for it, and cleans up the
+// object URL afterwards. Each call site gets its own instance so an
+// in-flight CV download never blocks a cover-letter (or application)
+// download, and vice versa.
+function createBlobDownload() {
+  let inFlight = false
+  let abortController: AbortController | null = null
+  let cleanupTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingRevoke: (() => void) | null = null
+
+  async function run(fetchBlob: (signal: AbortSignal) => Promise<Blob>, filename: string) {
+    if (inFlight) return
+    inFlight = true
+    abortController = new AbortController()
+    try {
+      const blob = await fetchBlob(abortController.signal)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      const cleanup = () => {
+        URL.revokeObjectURL(url)
+        a.remove()
+        cleanupTimer = null
+        pendingRevoke = null
+      }
+      pendingRevoke = cleanup
+      cleanupTimer = setTimeout(cleanup, 0)
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      throw error
+    } finally {
+      inFlight = false
+      abortController = null
+    }
+  }
+
+  function abort() {
+    abortController?.abort()
+    if (cleanupTimer !== null) {
+      clearTimeout(cleanupTimer)
+      pendingRevoke?.()
+    }
+  }
+
+  return { run, abort }
+}
+
+const applicationDownload = createBlobDownload()
+const coverLetterDownload = createBlobDownload()
+const cvDownload = createBlobDownload()
 
 // Tracks per-job DB creation state within this component instance so we don't
 // re-create a job that was already saved, even after switching jobs and back.
@@ -193,37 +243,41 @@ async function onCvFileSelected(file: File) {
 }
 
 async function downloadApplication() {
-  if (downloadInFlight) return
-  downloadInFlight = true
-  downloadAbortController = new AbortController()
   try {
-    const blob = await getBlob(
-      '/application/' + props.job.duplicateKey,
-      downloadAbortController.signal,
+    await applicationDownload.run(
+      (signal) => getBlob('/application/' + props.job.duplicateKey, signal),
+      'application-' + props.job.duplicateKey.replace(/:/g, '-') + '.pdf',
     )
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'application-' + props.job.duplicateKey.replace(/:/g, '-') + '.pdf'
-    document.body.appendChild(a)
-    a.click()
-    const cleanup = () => {
-      URL.revokeObjectURL(url)
-      a.remove()
-      downloadCleanupTimer = null
-      pendingDownloadRevoke = null
-    }
-    pendingDownloadRevoke = cleanup
-    downloadCleanupTimer = setTimeout(cleanup, 0)
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') return
     console.error(
       'Failed to download application:',
       error instanceof Error ? error.message : String(error),
     )
-  } finally {
-    downloadInFlight = false
-    downloadAbortController = null
+  }
+}
+
+async function downloadCoverLetter() {
+  try {
+    await coverLetterDownload.run(
+      (signal) => getBlob('/cover-letters/' + props.job.duplicateKey, signal),
+      'cover-letter-' + props.job.duplicateKey.replace(/:/g, '-') + '.pdf',
+    )
+  } catch (error) {
+    console.error(
+      'Failed to download cover letter:',
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
+async function downloadCv() {
+  try {
+    await cvDownload.run(
+      (signal) => getBlob('/cv/' + props.job.duplicateKey, signal),
+      'cv-' + props.job.duplicateKey.replace(/:/g, '-') + '.pdf',
+    )
+  } catch (error) {
+    console.error('Failed to download CV:', error instanceof Error ? error.message : String(error))
   }
 }
 
@@ -231,11 +285,9 @@ onBeforeUnmount(() => {
   if (uploadTimer !== null) {
     void uploadNow()
   }
-  downloadAbortController?.abort()
-  if (downloadCleanupTimer !== null) {
-    clearTimeout(downloadCleanupTimer)
-    pendingDownloadRevoke?.()
-  }
+  applicationDownload.abort()
+  coverLetterDownload.abort()
+  cvDownload.abort()
 })
 
 const generating = ref(false)
@@ -302,6 +354,8 @@ const statusLabel = computed(() => {
       @open-letter="view = 'letter'"
       @file-selected="onCvFileSelected"
       @download="downloadApplication"
+      @download-cover-letter="downloadCoverLetter"
+      @download-cv="downloadCv"
     />
 
     <!-- Cover letter editor -->

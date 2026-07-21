@@ -3,7 +3,13 @@ import { CoverLetterAction } from '@/components/coverLetter'
 import CvFileInput from '@/components/CvFileInput.vue'
 
 defineProps<{ letterDone: boolean; cvUploaded: boolean }>()
-defineEmits<{ openLetter: []; fileSelected: [file: File]; download: [] }>()
+defineEmits<{
+  openLetter: []
+  fileSelected: [file: File]
+  download: []
+  downloadCoverLetter: []
+  downloadCv: []
+}>()
 </script>
 
 <template>
@@ -12,11 +18,21 @@ defineEmits<{ openLetter: []; fileSelected: [file: File]; download: [] }>()
       Build your application for this role — write a tailored cover letter or attach your CV.
     </p>
 
-    <CoverLetterAction :done="letterDone" @click="$emit('openLetter')" />
+    <CoverLetterAction
+      :done="letterDone"
+      @click="$emit('openLetter')"
+      @download="$emit('downloadCoverLetter')"
+    />
 
-    <CvFileInput :uploaded="cvUploaded" @fileSelected="$emit('fileSelected', $event)" />
+    <CvFileInput
+      :uploaded="cvUploaded"
+      @fileSelected="$emit('fileSelected', $event)"
+      @download="$emit('downloadCv')"
+    />
 
-    <button type="button" class="cl-download" :disabled="!cvUploaded" @click="$emit('download')">Download application</button>
+    <button type="button" class="cl-download" :disabled="!cvUploaded" @click="$emit('download')">
+      Download application
+    </button>
   </div>
 </template>
 
