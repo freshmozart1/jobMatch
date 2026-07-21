@@ -30,7 +30,12 @@ defineEmits<{
       @download="$emit('downloadCv')"
     />
 
-    <button type="button" class="cl-download" :disabled="!cvUploaded" @click="$emit('download')">
+    <button
+      type="button"
+      class="cl-download"
+      :disabled="!letterDone && !cvUploaded"
+      @click="$emit('download')"
+    >
       Download application
     </button>
   </div>

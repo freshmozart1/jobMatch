@@ -242,20 +242,6 @@ async function onCvFileSelected(file: File) {
   }
 }
 
-async function downloadApplication() {
-  try {
-    await applicationDownload.run(
-      (signal) => getBlob('/application/' + props.job.duplicateKey, signal),
-      'application-' + props.job.duplicateKey.replace(/:/g, '-') + '.pdf',
-    )
-  } catch (error) {
-    console.error(
-      'Failed to download application:',
-      error instanceof Error ? error.message : String(error),
-    )
-  }
-}
-
 async function downloadCoverLetter() {
   try {
     await coverLetterDownload.run(
@@ -278,6 +264,28 @@ async function downloadCv() {
     )
   } catch (error) {
     console.error('Failed to download CV:', error instanceof Error ? error.message : String(error))
+  }
+}
+
+// The combined PDF only makes sense once both documents exist — with just one,
+// "Download application" downloads that one document instead.
+async function downloadApplication() {
+  if (letterDone.value && cvUploaded.value) {
+    try {
+      await applicationDownload.run(
+        (signal) => getBlob('/application/' + props.job.duplicateKey, signal),
+        'application-' + props.job.duplicateKey.replace(/:/g, '-') + '.pdf',
+      )
+    } catch (error) {
+      console.error(
+        'Failed to download application:',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  } else if (letterDone.value) {
+    await downloadCoverLetter()
+  } else if (cvUploaded.value) {
+    await downloadCv()
   }
 }
 

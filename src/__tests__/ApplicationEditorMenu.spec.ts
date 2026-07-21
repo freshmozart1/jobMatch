@@ -14,13 +14,18 @@ function mountMenu(props: { letterDone?: boolean; cvUploaded?: boolean } = {}) {
 
 describe('ApplicationEditorMenu', () => {
   describe('download button', () => {
-    it('is disabled when cvUploaded is false', () => {
-      const wrapper = mountMenu({ cvUploaded: false })
+    it('is disabled when neither letterDone nor cvUploaded is true', () => {
+      const wrapper = mountMenu({ letterDone: false, cvUploaded: false })
       expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(true)
     })
 
     it('is enabled when cvUploaded is true', () => {
       const wrapper = mountMenu({ cvUploaded: true })
+      expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    it('is enabled when letterDone is true, even if cvUploaded is false', () => {
+      const wrapper = mountMenu({ letterDone: true, cvUploaded: false })
       expect((wrapper.find('.cl-download').element as HTMLButtonElement).disabled).toBe(false)
     })
 
@@ -31,7 +36,7 @@ describe('ApplicationEditorMenu', () => {
     })
 
     it('does not emit "download" when the button is disabled', async () => {
-      const wrapper = mountMenu({ cvUploaded: false })
+      const wrapper = mountMenu({ letterDone: false, cvUploaded: false })
       await wrapper.find('.cl-download').trigger('click')
       expect(wrapper.emitted('download')).toBeFalsy()
     })
