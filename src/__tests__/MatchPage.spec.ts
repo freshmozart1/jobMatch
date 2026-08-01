@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils'
 import { JobCardContainer, LikeContainer } from '@/components'
 import MatchPage from '@/pages/match/MatchPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
-import { swipeTopCard } from './testUtils'
+import { createSseResponse, swipeTopCard } from './testUtils'
 
 const testJobs: ScrapedJob[] = [
   {
@@ -47,19 +47,56 @@ const testJobs: ScrapedJob[] = [
   },
 ]
 
-const playwrightResponseBody = {
-  'Full Stack Engineer': {
-    searchUrl: 'https://www.linkedin.com/jobs/search?keywords=Full+Stack+Engineer',
-    jobs: testJobs,
-  },
-}
-
 function createJsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
+}
+
+function createControllableSseResponse() {
+  const encoder = new TextEncoder()
+  let controllerRef!: ReadableStreamDefaultController<Uint8Array>
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controllerRef = controller
+      controller.enqueue(encoder.encode('ping\n\n'))
+    },
+  })
+  return {
+    response: new Response(stream, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    }),
+    push(event: unknown) {
+      controllerRef.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+    },
+    close() {
+      controllerRef.close()
+    },
+  }
+}
+
+function mountWithControllableStream() {
+  const stream = createControllableSseResponse()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      if (input.toString().endsWith('/scrape/linkedin')) return stream.response
+      return createJsonResponse({})
+    }),
+  )
+  return { wrapper: mount(MatchPage), stream }
+}
+
+async function mountWithFirstJobStreamed() {
+  const { wrapper, stream } = mountWithControllableStream()
+  stream.push(testJobs[0])
+  await vi.waitFor(() => {
+    expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
+  })
+  return { wrapper, stream }
 }
 
 function createDeferred<T>() {
@@ -77,7 +114,7 @@ function mockFetch(playwrightHandler?: () => Promise<Response>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = input.toString()
     if (url.endsWith('/scrape/linkedin')) {
-      return playwrightHandler ? playwrightHandler() : createJsonResponse(playwrightResponseBody)
+      return playwrightHandler ? playwrightHandler() : createSseResponse(testJobs)
     }
     if (url.endsWith('/jobs/create')) {
       return createJsonResponse({})
@@ -192,7 +229,7 @@ describe('MatchPage', () => {
         if (input.toString().endsWith('/scrape/linkedin')) {
           playwrightCallCount++
           if (playwrightCallCount === 1) return staleDeferred.promise
-          return createJsonResponse(playwrightResponseBody)
+          return createSseResponse(testJobs)
         }
         return createJsonResponse({})
       }),
@@ -213,7 +250,7 @@ describe('MatchPage', () => {
     })
 
     // Resolve the stale first response — generation guard must discard it.
-    staleDeferred.resolve(createJsonResponse(playwrightResponseBody))
+    staleDeferred.resolve(createSseResponse(testJobs))
     await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
 
@@ -288,11 +325,47 @@ describe('MatchPage', () => {
     expect(wrapper.findComponent(JobCardContainer).exists()).toBe(false)
 
     // Resolve the playwright response — card stack appears.
-    deferred.resolve(createJsonResponse(playwrightResponseBody))
+    deferred.resolve(createSseResponse(testJobs))
 
     await vi.waitFor(() => {
       expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
     })
+  })
+
+  it('renders jobs progressively as SSE frames arrive', async () => {
+    const { wrapper, stream } = await mountWithFirstJobStreamed()
+    expect(wrapper.find('.job-card-stack__next').exists()).toBe(false)
+
+    stream.push(testJobs[1])
+    await vi.waitFor(() => {
+      expect(wrapper.find('.job-card-stack__next').exists()).toBe(true)
+    })
+
+    stream.close()
+  })
+
+  it('surfaces a per-scrape SSE error frame as an error message', async () => {
+    const { wrapper, stream } = mountWithControllableStream()
+
+    stream.push({ error: 'Scrape failed', reason: 'boom' })
+    stream.close()
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('.match-page__status--error').text()).toBe('Scrape failed')
+    })
+  })
+
+  it('keeps already-streamed jobs visible alongside a per-scrape SSE error banner', async () => {
+    const { wrapper, stream } = await mountWithFirstJobStreamed()
+
+    stream.push({ error: 'Scrape failed', reason: 'boom' })
+    stream.close()
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('.match-page__status--warning').text()).toBe('Scrape failed')
+    })
+    expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
+    expect(wrapper.find('.match-page__status--error').exists()).toBe(false)
   })
 
   it('renders a single like container for the top card', async () => {

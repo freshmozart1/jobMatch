@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getBlob, getJson, postJson } from '@/lib/api'
+import { getBlob, getJson, postJson, postJsonEventStream } from '@/lib/api'
+import { createSseResponse } from './testUtils'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
@@ -7,6 +8,14 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
+}
+
+async function collect<T>(generator: AsyncGenerator<T>): Promise<T[]> {
+  const items: T[] = []
+  for await (const item of generator) {
+    items.push(item)
+  }
+  return items
 }
 
 describe('getJson', () => {
@@ -172,5 +181,77 @@ describe('postJson', () => {
   it('falls back to a status-code message when statusText is empty', async () => {
     fetchMock.mockResolvedValue(new Response('not json', { status: 503, statusText: '' }))
     await expect(postJson('/fail', {})).rejects.toThrow('Request failed with status 503')
+  })
+})
+
+describe('postJsonEventStream', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('sends a POST request with JSON content-type and stringified body', async () => {
+    fetchMock.mockResolvedValue(createSseResponse([{ id: 1 }]))
+
+    await collect(postJsonEventStream('/scrape/linkedin', { hello: 'world' }))
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3000/scrape/linkedin',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hello: 'world' }),
+      }),
+    )
+  })
+
+  it('yields each parsed "data:" frame in order', async () => {
+    fetchMock.mockResolvedValue(createSseResponse([{ id: 1 }, { id: 2 }, { id: 3 }]))
+
+    const events = await collect(postJsonEventStream('/scrape/linkedin', {}))
+
+    expect(events).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }])
+  })
+
+  it('ignores non-"data:" frames such as the bare ping keepalive', async () => {
+    fetchMock.mockResolvedValue(createSseResponse([{ id: 1 }]))
+
+    const events = await collect(postJsonEventStream('/scrape/linkedin', {}))
+
+    expect(events).toEqual([{ id: 1 }])
+  })
+
+  it('yields nothing when the stream closes without any events', async () => {
+    fetchMock.mockResolvedValue(createSseResponse([]))
+
+    const events = await collect(postJsonEventStream('/scrape/linkedin', {}))
+
+    expect(events).toEqual([])
+  })
+
+  it('throws with the server error message on a non-2xx initial response', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'Invalid request body' }, { status: 400 }))
+
+    await expect(collect(postJsonEventStream('/scrape/linkedin', {}))).rejects.toThrow(
+      'Invalid request body',
+    )
+  })
+
+  it('forwards the AbortSignal to fetch when provided', async () => {
+    fetchMock.mockResolvedValue(createSseResponse([]))
+    const controller = new AbortController()
+
+    await collect(postJsonEventStream('/scrape/linkedin', {}, controller.signal))
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:3000/scrape/linkedin',
+      expect.objectContaining({ signal: controller.signal }),
+    )
   })
 })
