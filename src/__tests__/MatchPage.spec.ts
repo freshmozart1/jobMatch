@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils'
 import { JobCardContainer, LikeContainer } from '@/components'
 import MatchPage from '@/pages/match/MatchPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
-import { swipeTopCard } from './testUtils'
+import { createSseResponse, swipeTopCard } from './testUtils'
 
 const testJobs: ScrapedJob[] = [
   {
@@ -55,24 +55,6 @@ function createJsonResponse(body: unknown, init: ResponseInit = {}) {
   })
 }
 
-function createSseResponse(events: unknown[], init: ResponseInit = {}) {
-  const encoder = new TextEncoder()
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(encoder.encode('ping\n\n'))
-      for (const event of events) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-      }
-      controller.close()
-    },
-  })
-  return new Response(stream, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
-    ...init,
-  })
-}
-
 function createControllableSseResponse() {
   const encoder = new TextEncoder()
   let controllerRef!: ReadableStreamDefaultController<Uint8Array>
@@ -94,6 +76,27 @@ function createControllableSseResponse() {
       controllerRef.close()
     },
   }
+}
+
+function mountWithControllableStream() {
+  const stream = createControllableSseResponse()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      if (input.toString().endsWith('/scrape/linkedin')) return stream.response
+      return createJsonResponse({})
+    }),
+  )
+  return { wrapper: mount(MatchPage), stream }
+}
+
+async function mountWithFirstJobStreamed() {
+  const { wrapper, stream } = mountWithControllableStream()
+  stream.push(testJobs[0])
+  await vi.waitFor(() => {
+    expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
+  })
+  return { wrapper, stream }
 }
 
 function createDeferred<T>() {
@@ -330,21 +333,7 @@ describe('MatchPage', () => {
   })
 
   it('renders jobs progressively as SSE frames arrive', async () => {
-    const stream = createControllableSseResponse()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (input.toString().endsWith('/scrape/linkedin')) return stream.response
-        return createJsonResponse({})
-      }),
-    )
-
-    const wrapper = mount(MatchPage)
-
-    stream.push(testJobs[0])
-    await vi.waitFor(() => {
-      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
-    })
+    const { wrapper, stream } = await mountWithFirstJobStreamed()
     expect(wrapper.find('.job-card-stack__next').exists()).toBe(false)
 
     stream.push(testJobs[1])
@@ -356,16 +345,7 @@ describe('MatchPage', () => {
   })
 
   it('surfaces a per-scrape SSE error frame as an error message', async () => {
-    const stream = createControllableSseResponse()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (input.toString().endsWith('/scrape/linkedin')) return stream.response
-        return createJsonResponse({})
-      }),
-    )
-
-    const wrapper = mount(MatchPage)
+    const { wrapper, stream } = mountWithControllableStream()
 
     stream.push({ error: 'Scrape failed', reason: 'boom' })
     stream.close()
@@ -376,21 +356,7 @@ describe('MatchPage', () => {
   })
 
   it('keeps already-streamed jobs visible alongside a per-scrape SSE error banner', async () => {
-    const stream = createControllableSseResponse()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        if (input.toString().endsWith('/scrape/linkedin')) return stream.response
-        return createJsonResponse({})
-      }),
-    )
-
-    const wrapper = mount(MatchPage)
-
-    stream.push(testJobs[0])
-    await vi.waitFor(() => {
-      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
-    })
+    const { wrapper, stream } = await mountWithFirstJobStreamed()
 
     stream.push({ error: 'Scrape failed', reason: 'boom' })
     stream.close()

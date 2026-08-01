@@ -1,28 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getBlob, getJson, postJson, postJsonEventStream } from '@/lib/api'
+import { createSseResponse } from './testUtils'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
-    ...init,
-  })
-}
-
-function sseResponse(events: unknown[], init: ResponseInit = {}) {
-  const encoder = new TextEncoder()
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(encoder.encode('ping\n\n'))
-      for (const event of events) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-      }
-      controller.close()
-    },
-  })
-  return new Response(stream, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
     ...init,
   })
 }
@@ -214,7 +197,7 @@ describe('postJsonEventStream', () => {
   })
 
   it('sends a POST request with JSON content-type and stringified body', async () => {
-    fetchMock.mockResolvedValue(sseResponse([{ id: 1 }]))
+    fetchMock.mockResolvedValue(createSseResponse([{ id: 1 }]))
 
     await collect(postJsonEventStream('/scrape/linkedin', { hello: 'world' }))
 
@@ -229,7 +212,7 @@ describe('postJsonEventStream', () => {
   })
 
   it('yields each parsed "data:" frame in order', async () => {
-    fetchMock.mockResolvedValue(sseResponse([{ id: 1 }, { id: 2 }, { id: 3 }]))
+    fetchMock.mockResolvedValue(createSseResponse([{ id: 1 }, { id: 2 }, { id: 3 }]))
 
     const events = await collect(postJsonEventStream('/scrape/linkedin', {}))
 
@@ -237,7 +220,7 @@ describe('postJsonEventStream', () => {
   })
 
   it('ignores non-"data:" frames such as the bare ping keepalive', async () => {
-    fetchMock.mockResolvedValue(sseResponse([{ id: 1 }]))
+    fetchMock.mockResolvedValue(createSseResponse([{ id: 1 }]))
 
     const events = await collect(postJsonEventStream('/scrape/linkedin', {}))
 
@@ -245,7 +228,7 @@ describe('postJsonEventStream', () => {
   })
 
   it('yields nothing when the stream closes without any events', async () => {
-    fetchMock.mockResolvedValue(sseResponse([]))
+    fetchMock.mockResolvedValue(createSseResponse([]))
 
     const events = await collect(postJsonEventStream('/scrape/linkedin', {}))
 
@@ -261,7 +244,7 @@ describe('postJsonEventStream', () => {
   })
 
   it('forwards the AbortSignal to fetch when provided', async () => {
-    fetchMock.mockResolvedValue(sseResponse([]))
+    fetchMock.mockResolvedValue(createSseResponse([]))
     const controller = new AbortController()
 
     await collect(postJsonEventStream('/scrape/linkedin', {}, controller.signal))
