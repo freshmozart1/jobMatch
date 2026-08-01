@@ -149,7 +149,7 @@ async function fetchJobs(): Promise<void> {
 
   try {
     const result = await postJson<ScrapeJobResponseBody>(
-      '/scrape/linkedin/playwright',
+      '/scrape/linkedin',
       {
         keywords: keywords.value,
         location: getCity(),
