@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.0
+
+### Changed
+
+- `ScrapedJob` (`src/components/jobCard/types.ts`) now matches the corrected backend scrape response: `companyAddress: CompanyAddress` was replaced with `companyAddresses: CompanyAddress[]`, and `sourceJobId`, `location`, `descriptionText`, `postedAt`, and `tags` changed from optional to required, since the backend always populates them on a successful scrape and now sends an array of addresses instead of a single one. Types-only change; no `.vue` components read `companyAddress` today (closes #37).
+
 ## v0.0.1
 
 ### Fixed
