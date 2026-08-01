@@ -17,12 +17,14 @@ function createJob(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
     scrapedAt: '2026-06-02T14:42:54.764Z',
     tags: ['Berufseinstieg', 'Vollzeit', 'Ingenieurwesen und IT', 'Einzelhandel'],
     duplicateKey: 'linkedin:4422110097',
-    companyAddress: {
-      streetAddress: 'Musterstraße 1',
-      city: 'Hamburg',
-      postalCode: '20095',
-      countryCode: 'DE',
-    },
+    companyAddresses: [
+      {
+        streetAddress: 'Musterstraße 1',
+        city: 'Hamburg',
+        postalCode: '20095',
+        countryCode: 'DE',
+      },
+    ],
     embedding: [],
     ...overrides,
   }
@@ -79,7 +81,7 @@ describe('JobCard', () => {
   })
 
   it('omits the description when descriptionText is missing', () => {
-    const job = createJob({ descriptionText: undefined })
+    const job = createJob({ descriptionText: '' })
     const wrapper = mount(JobCard, { props: { job } })
 
     expect(wrapper.find('.job-card__description-frame').exists()).toBe(false)

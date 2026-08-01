@@ -7,17 +7,17 @@ export type CompanyAddress = {
 
 export type ScrapedJob = {
   sourceHostname: string
-  sourceJobId?: string
+  sourceJobId: string
   sourceUrl: string
   title: string
   company: string
-  location?: string
-  descriptionText?: string
-  postedAt?: string
+  location: string
+  descriptionText: string
+  postedAt: string
   scrapedAt: string
-  tags?: string[]
+  tags: string[]
   duplicateKey: string
-  companyAddress: CompanyAddress
+  companyAddresses: CompanyAddress[]
   embedding: number[]
   match?: number
 }
