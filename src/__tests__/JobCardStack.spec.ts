@@ -8,17 +8,24 @@ import { swipeTopCard } from './testUtils'
 function createJob(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
   return {
     sourceHostname: 'de.linkedin.com',
+    sourceJobId: '1',
     sourceUrl: 'https://de.linkedin.com/jobs/view/1/',
     title: 'A Job',
     company: 'A Company',
+    location: 'Hamburg',
+    descriptionText: 'A description.',
+    postedAt: 'Vor 1 Tag',
     scrapedAt: '2026-06-02T14:42:54.764Z',
+    tags: [],
     duplicateKey: 'linkedin:1',
-    companyAddress: {
-      streetAddress: 'Musterstraße 1',
-      city: 'Hamburg',
-      postalCode: '20095',
-      countryCode: 'DE',
-    },
+    companyAddresses: [
+      {
+        streetAddress: 'Musterstraße 1',
+        city: 'Hamburg',
+        postalCode: '20095',
+        countryCode: 'DE',
+      },
+    ],
     embedding: [],
     ...overrides,
   }
