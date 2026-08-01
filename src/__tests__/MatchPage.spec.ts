@@ -375,6 +375,33 @@ describe('MatchPage', () => {
     })
   })
 
+  it('keeps already-streamed jobs visible alongside a per-scrape SSE error banner', async () => {
+    const stream = createControllableSseResponse()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (input.toString().endsWith('/scrape/linkedin')) return stream.response
+        return createJsonResponse({})
+      }),
+    )
+
+    const wrapper = mount(MatchPage)
+
+    stream.push(testJobs[0])
+    await vi.waitFor(() => {
+      expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
+    })
+
+    stream.push({ error: 'Scrape failed', reason: 'boom' })
+    stream.close()
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('.match-page__status--warning').text()).toBe('Scrape failed')
+    })
+    expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true)
+    expect(wrapper.find('.match-page__status--error').exists()).toBe(false)
+  })
+
   it('renders a single like container for the top card', async () => {
     const wrapper = await mountLoadedMatchPage()
 

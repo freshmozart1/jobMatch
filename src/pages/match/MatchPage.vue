@@ -197,10 +197,16 @@ watch(searchOpen, (open) => {
 
     <MatchEmpty v-if="!matchEnabled" @open-search="searchOpen = true" />
     <template v-else>
-      <p v-if="errorMessage" class="match-page__status match-page__status--error">
+      <p
+        v-if="errorMessage && jobs.length === 0"
+        class="match-page__status match-page__status--error"
+      >
         {{ errorMessage }}
       </p>
       <template v-else-if="jobs.length > 0 || !isLoading">
+        <p v-if="errorMessage" class="match-page__status match-page__status--warning">
+          {{ errorMessage }}
+        </p>
         <MatchFilterBar
           v-model:enabled="matchFilterOn"
           v-model:threshold="matchThreshold"
