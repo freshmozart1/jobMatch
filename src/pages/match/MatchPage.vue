@@ -5,10 +5,15 @@ import ApplicationEditorPage from './ApplicationEditorPage.vue'
 import MatchEmpty from './MatchEmpty.vue'
 import SearchPage from './SearchPage.vue'
 import type { ScrapedJob } from '@/components/jobCard/types'
-import { postJson } from '@/lib/api'
+import { postJson, postJsonEventStream } from '@/lib/api'
 import { DEFAULT_DATE_POSTED } from './searchParams'
 
-type ScrapeJobResponseBody = Record<string, { searchUrl: string; jobs: ScrapedJob[] }>
+type ScrapeErrorEvent = { error: string; reason: unknown }
+type ScrapeStreamEvent = ScrapedJob | ScrapeErrorEvent
+
+function isScrapeErrorEvent(event: ScrapeStreamEvent): event is ScrapeErrorEvent {
+  return 'error' in event
+}
 
 const jobs = ref<ScrapedJob[]>([])
 const isLoading = ref(false)
@@ -148,7 +153,7 @@ async function fetchJobs(): Promise<void> {
   errorMessage.value = null
 
   try {
-    const result = await postJson<ScrapeJobResponseBody>(
+    for await (const event of postJsonEventStream<ScrapeStreamEvent>(
       '/scrape/linkedin',
       {
         keywords: keywords.value,
@@ -158,12 +163,16 @@ async function fetchJobs(): Promise<void> {
         maxPages: getMaxPages(),
       },
       signal,
-    )
-    if (scrapeGeneration !== myGeneration) return
-    jobs.value = Object.values(result).flatMap(({ jobs }) => jobs)
+    )) {
+      if (scrapeGeneration !== myGeneration) return
+      if (isScrapeErrorEvent(event)) {
+        errorMessage.value = event.error
+        continue
+      }
+      jobs.value.push(event)
+    }
   } catch (error) {
     if (scrapeGeneration === myGeneration) {
-      jobs.value = []
       errorMessage.value = error instanceof Error ? error.message : 'Failed to fetch jobs.'
     }
   } finally {
