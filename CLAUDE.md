@@ -22,7 +22,6 @@ npm run test:e2e     # Playwright e2e tests
 
 ## Code Style
 
-- Single quotes, 100-char print width (Prettier)
 - `noUncheckedIndexedAccess: true` — always guard array/object lookups
 
 ## Path Aliases
