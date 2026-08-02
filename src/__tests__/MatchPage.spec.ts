@@ -220,7 +220,7 @@ describe('MatchPage', () => {
     await mountLoadedMatchPage()
 
     const playwrightCall = fetchMock.mock.calls.find((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin'),
+      args[0].toString().endsWith('/scrape/linkedin'),
     )
     expect(playwrightCall).toBeDefined()
     const init = (playwrightCall as unknown as [unknown, RequestInit])[1]
@@ -272,7 +272,7 @@ describe('MatchPage', () => {
     const wrapper = await mountLoadedMatchPage()
 
     const callsBefore = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin'),
+      args[0].toString().endsWith('/scrape/linkedin'),
     ).length
 
     // Open and immediately close the search panel without modifying any params.
@@ -283,7 +283,7 @@ describe('MatchPage', () => {
     await wrapper.vm.$nextTick()
 
     const callsAfter = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin'),
+      args[0].toString().endsWith('/scrape/linkedin'),
     ).length
 
     expect(callsAfter).toBe(callsBefore)
@@ -295,7 +295,7 @@ describe('MatchPage', () => {
     const wrapper = await mountLoadedMatchPage()
 
     const callsBefore = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin'),
+      args[0].toString().endsWith('/scrape/linkedin'),
     ).length
 
     // Change datePosted in localStorage to simulate the user changing the dropdown.
@@ -309,7 +309,7 @@ describe('MatchPage', () => {
     await wrapper.vm.$nextTick()
 
     const callsAfter = fetchMock.mock.calls.filter((args) =>
-      args[0]!.toString().endsWith('/scrape/linkedin'),
+      args[0].toString().endsWith('/scrape/linkedin'),
     ).length
 
     expect(callsAfter).toBe(callsBefore + 1)

@@ -35,8 +35,7 @@ describe('getJson', () => {
 
     await getJson('/test')
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3000/test')
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('http://localhost:3000/test')
   })
 
   it('returns parsed JSON on a 2xx response', async () => {
@@ -90,8 +89,7 @@ describe('getBlob', () => {
   it('sends a GET request to the correct URL', async () => {
     fetchMock.mockResolvedValue(new Response(new Blob(['%PDF']), { status: 200 }))
     await getBlob('/application/linkedin:1001')
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3000/application/linkedin:1001')
-    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('http://localhost:3000/application/linkedin:1001')
   })
 
   it('returns a Blob on a 2xx response', async () => {
