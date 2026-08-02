@@ -222,7 +222,7 @@ describe('MatchPage', () => {
                     keywords: ['Full Stack Engineer'],
                     location: 'Hamburg',
                     distance: 25,
-                    datePosted: '86400',
+                    datePosted: 'day',
                     maxPages: 1,
                 }),
             }),
@@ -324,7 +324,7 @@ describe('MatchPage', () => {
         ).length;
 
         // Change datePosted in localStorage to simulate the user changing the dropdown.
-        window.localStorage.setItem('jobmatch.searchdateposted', '604800');
+        window.localStorage.setItem('jobmatch.searchdateposted', 'week');
 
         // Open and close the search panel without changing keywords.
         wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search');
