@@ -39,14 +39,14 @@ Collect the generated code into a Playwright test:
 import { test, expect } from '@playwright/test';
 
 test('login flow', async ({ page }) => {
-  // Generated code from playwright-cli session:
-  await page.goto('https://example.com/login');
-  await page.getByRole('textbox', { name: 'Email' }).fill('user@example.com');
-  await page.getByRole('textbox', { name: 'Password' }).fill('password123');
-  await page.getByRole('button', { name: 'Sign In' }).click();
+    // Generated code from playwright-cli session:
+    await page.goto('https://example.com/login');
+    await page.getByRole('textbox', { name: 'Email' }).fill('user@example.com');
+    await page.getByRole('textbox', { name: 'Password' }).fill('password123');
+    await page.getByRole('button', { name: 'Sign In' }).click();
 
-  // Add assertions
-  await expect(page).toHaveURL(/.*dashboard/);
+    // Add assertions
+    await expect(page).toHaveURL(/.*dashboard/);
 });
 ```
 
@@ -115,8 +115,12 @@ await page.getByRole('button', { name: 'Submit' }).click();
 // Manual assertions using the outputs above:
 await expect(page.getByRole('alert', { name: 'Success' })).toBeVisible();
 await expect(page.getByTestId('main-header')).toHaveText('Welcome, user');
-await expect(page.getByRole('textbox', { name: 'Email' })).toHaveValue('user@example.com');
-await expect(page.getByRole('checkbox', { name: 'Enable notifications' })).toBeChecked();
+await expect(page.getByRole('textbox', { name: 'Email' })).toHaveValue(
+    'user@example.com',
+);
+await expect(
+    page.getByRole('checkbox', { name: 'Enable notifications' }),
+).toBeChecked();
 
 // toMatchAriaSnapshot on the whole page, finds a matching region
 await expect(page).toMatchAriaSnapshot(`

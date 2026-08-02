@@ -1,84 +1,94 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect } from 'vitest';
+import { mount } from '@vue/test-utils';
 
-import { JobCardStack, JobCardContainer } from '@/components'
-import type { ScrapedJob } from '@/components/jobCard/types'
-import { swipeTopCard } from './testUtils'
+import { JobCardStack, JobCardContainer } from '@/components';
+import type { ScrapedJob } from '@/components/jobCard/types';
+import { swipeTopCard } from './testUtils';
 
 function createJob(overrides: Partial<ScrapedJob> = {}): ScrapedJob {
-  return {
-    sourceHostname: 'de.linkedin.com',
-    sourceJobId: '1',
-    sourceUrl: 'https://de.linkedin.com/jobs/view/1/',
-    title: 'A Job',
-    company: 'A Company',
-    location: 'Hamburg',
-    descriptionText: 'A description.',
-    postedAt: 'Vor 1 Tag',
-    scrapedAt: '2026-06-02T14:42:54.764Z',
-    tags: [],
-    duplicateKey: 'linkedin:1',
-    companyAddresses: [
-      {
-        streetAddress: 'Musterstraße 1',
-        city: 'Hamburg',
-        postalCode: '20095',
-        countryCode: 'DE',
-      },
-    ],
-    embedding: [],
-    ...overrides,
-  }
+    return {
+        sourceHostname: 'de.linkedin.com',
+        sourceJobId: '1',
+        sourceUrl: 'https://de.linkedin.com/jobs/view/1/',
+        title: 'A Job',
+        company: 'A Company',
+        location: 'Hamburg',
+        descriptionText: 'A description.',
+        postedAt: 'Vor 1 Tag',
+        scrapedAt: '2026-06-02T14:42:54.764Z',
+        tags: [],
+        duplicateKey: 'linkedin:1',
+        companyAddresses: [
+            {
+                streetAddress: 'Musterstraße 1',
+                city: 'Hamburg',
+                postalCode: '20095',
+                countryCode: 'DE',
+            },
+        ],
+        embedding: [],
+        ...overrides,
+    };
 }
 
 describe('JobCardStack', () => {
-  const jobs = [
-    createJob({ title: 'First', duplicateKey: 'k1' }),
-    createJob({ title: 'Second', duplicateKey: 'k2' }),
-  ]
+    const jobs = [
+        createJob({ title: 'First', duplicateKey: 'k1' }),
+        createJob({ title: 'Second', duplicateKey: 'k2' }),
+    ];
 
-  it('shows the first job on top initially', () => {
-    const wrapper = mount(JobCardStack, { props: { jobs } })
+    it('shows the first job on top initially', () => {
+        const wrapper = mount(JobCardStack, { props: { jobs } });
 
-    expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
-      title: 'First',
-    })
-  })
+        expect(
+            wrapper.findComponent(JobCardContainer).props('job'),
+        ).toMatchObject({
+            title: 'First',
+        });
+    });
 
-  it('advances the index when the top card emits a swipe', async () => {
-    const wrapper = mount(JobCardStack, { props: { jobs } })
+    it('advances the index when the top card emits a swipe', async () => {
+        const wrapper = mount(JobCardStack, { props: { jobs } });
 
-    swipeTopCard(wrapper)
-    await wrapper.vm.$nextTick()
+        swipeTopCard(wrapper);
+        await wrapper.vm.$nextTick();
 
-    expect(wrapper.findComponent(JobCardContainer).props('job')).toMatchObject({
-      title: 'Second',
-    })
-  })
+        expect(
+            wrapper.findComponent(JobCardContainer).props('job'),
+        ).toMatchObject({
+            title: 'Second',
+        });
+    });
 
-  it('renders the empty state once all jobs are swiped away', async () => {
-    const wrapper = mount(JobCardStack, { props: { jobs } })
+    it('renders the empty state once all jobs are swiped away', async () => {
+        const wrapper = mount(JobCardStack, { props: { jobs } });
 
-    swipeTopCard(wrapper)
-    await wrapper.vm.$nextTick()
-    swipeTopCard(wrapper)
-    await wrapper.vm.$nextTick()
+        swipeTopCard(wrapper);
+        await wrapper.vm.$nextTick();
+        swipeTopCard(wrapper);
+        await wrapper.vm.$nextTick();
 
-    expect(wrapper.findComponent(JobCardContainer).exists()).toBe(false)
-    expect(wrapper.find('.job-card-stack__empty').text()).toBe('No more jobs')
-  })
+        expect(wrapper.findComponent(JobCardContainer).exists()).toBe(false);
+        expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+            'No more jobs',
+        );
+    });
 
-  it('shows a loading indicator when the stack is empty and isLoading is true', () => {
-    const wrapper = mount(JobCardStack, { props: { jobs: [], isLoading: true } })
+    it('shows a loading indicator when the stack is empty and isLoading is true', () => {
+        const wrapper = mount(JobCardStack, {
+            props: { jobs: [], isLoading: true },
+        });
 
-    expect(wrapper.find('.job-card-stack__loading').exists()).toBe(true)
-    expect(wrapper.find('.job-card-stack__empty').exists()).toBe(false)
-  })
+        expect(wrapper.find('.job-card-stack__loading').exists()).toBe(true);
+        expect(wrapper.find('.job-card-stack__empty').exists()).toBe(false);
+    });
 
-  it('shows the empty label when the stack is empty and isLoading is false', () => {
-    const wrapper = mount(JobCardStack, { props: { jobs: [], isLoading: false } })
+    it('shows the empty label when the stack is empty and isLoading is false', () => {
+        const wrapper = mount(JobCardStack, {
+            props: { jobs: [], isLoading: false },
+        });
 
-    expect(wrapper.find('.job-card-stack__empty').exists()).toBe(true)
-    expect(wrapper.find('.job-card-stack__loading').exists()).toBe(false)
-  })
-})
+        expect(wrapper.find('.job-card-stack__empty').exists()).toBe(true);
+        expect(wrapper.find('.job-card-stack__loading').exists()).toBe(false);
+    });
+});

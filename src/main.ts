@@ -1,12 +1,12 @@
-import { createApp } from 'vue'
-import App from './App.vue'
-import router from './router'
-import './constants/colors.css'
-import './constants/layout.css'
-import './constants/typography.css'
+import { createApp } from 'vue';
+import App from './App.vue';
+import router from './router';
+import './constants/colors.css';
+import './constants/layout.css';
+import './constants/typography.css';
 
-const app = createApp(App)
+const app = createApp(App);
 
-app.use(router)
+app.use(router);
 
-app.mount('#app')
+app.mount('#app');
