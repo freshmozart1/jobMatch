@@ -10,10 +10,10 @@ Vue 3 + TypeScript + Vite frontend. Package manager: npm.
 
 ```bash
 npm run dev          # dev server on http://0.0.0.0:5173
-npm run build        # type-check + Vite build (parallel)
+npm run build        # Vite build (parallel)
 npm run type-check   # vue-tsc --build
 
-npm run lint         # oxlint + ESLint in sequence, both with --fix
+npm run lint         # ESLint with --fix
 npm run format       # Prettier with --experimental-cli on src/
 
 npm run test:unit    # Vitest unit tests
@@ -22,7 +22,7 @@ npm run test:e2e     # Playwright e2e tests
 
 ## Code Style
 
-- No semicolons, single quotes, 100-char print width (Prettier)
+- Single quotes, 100-char print width (Prettier)
 - `noUncheckedIndexedAccess: true` — always guard array/object lookups
 
 ## Path Aliases
