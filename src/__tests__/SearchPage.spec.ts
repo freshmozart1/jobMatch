@@ -131,24 +131,24 @@ describe('SearchPage', () => {
         const wrapper = mount(SearchPage, { props: { keywords: [] } });
         const options = wrapper.findAll('#se-date-posted option');
         expect(options).toHaveLength(3);
-        expect(options[0]!.attributes('value')).toBe('86400');
-        expect(options[1]!.attributes('value')).toBe('604800');
-        expect(options[2]!.attributes('value')).toBe('2592000');
+        expect(options[0]!.attributes('value')).toBe('day');
+        expect(options[1]!.attributes('value')).toBe('week');
+        expect(options[2]!.attributes('value')).toBe('month');
     });
 
     it('saves datePosted to localStorage when the select changes', async () => {
         const wrapper = mount(SearchPage, { props: { keywords: [] } });
-        await wrapper.find('#se-date-posted').setValue('604800');
+        await wrapper.find('#se-date-posted').setValue('week');
         expect(window.localStorage.getItem('jobmatch.searchdateposted')).toBe(
-            '604800',
+            'week',
         );
     });
 
     it('loads datePosted from localStorage on mount', () => {
-        window.localStorage.setItem('jobmatch.searchdateposted', '2592000');
+        window.localStorage.setItem('jobmatch.searchdateposted', 'month');
         const wrapper = mount(SearchPage, { props: { keywords: [] } });
         const select = wrapper.find('#se-date-posted')
             .element as HTMLSelectElement;
-        expect(select.value).toBe('2592000');
+        expect(select.value).toBe('month');
     });
 });

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.1
+
+### Fixed
+
+- The date-posted filter (`SearchPage.vue`) sent `86400`/`604800`/`2592000` (seconds) as its select option values and `DEFAULT_DATE_POSTED` (`src/pages/match/searchParams.ts`), which didn't match the backend's `/scrape/linkedin` handler's expected literal union `'day' | 'month' | 'week'` — every scrape request was rejected with a 400. Changed the option values and default to `'day'`, `'week'`, and `'month'` (closes #42).
+
 ## v0.1.0
 
 ### Changed

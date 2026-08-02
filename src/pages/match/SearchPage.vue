@@ -308,9 +308,9 @@ const hint = computed(() =>
                 :value="datePosted"
                 @change="onDatePostedChange"
             >
-                <option value="86400">Past 24 hours</option>
-                <option value="604800">Past week</option>
-                <option value="2592000">Past month</option>
+                <option value="day">Past 24 hours</option>
+                <option value="week">Past week</option>
+                <option value="month">Past month</option>
             </select>
             <p class="se-help">
                 Only show jobs posted within this time window.
