@@ -93,9 +93,8 @@ function mountWithControllableStream() {
     const stream = createControllableSseResponse();
     vi.stubGlobal(
         'fetch',
-        vi.fn(async (input: RequestInfo | URL) => {
-            if (input.toString().endsWith('/scrape/linkedin'))
-                return stream.response;
+        vi.fn((input: string) => {
+            if (input.endsWith('/scrape/linkedin')) return stream.response;
             return createJsonResponse({});
         }),
     );
@@ -123,8 +122,8 @@ function createDeferred<T>() {
 }
 
 function mockFetch(playwrightHandler?: () => Promise<Response>) {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-        const url = input.toString();
+    const fetchMock = vi.fn(async (input: string) => {
+        const url = input;
         if (url.endsWith('/scrape/linkedin')) {
             return playwrightHandler
                 ? playwrightHandler()
@@ -223,7 +222,6 @@ describe('MatchPage', () => {
                     location: 'Hamburg',
                     distance: 25,
                     datePosted: 'day',
-                    maxPages: 1,
                 }),
             }),
         );
@@ -245,7 +243,7 @@ describe('MatchPage', () => {
         await mountLoadedMatchPage();
 
         const playwrightCall = fetchMock.mock.calls.find((args) =>
-            args[0].toString().endsWith('/scrape/linkedin'),
+            args[0].endsWith('/scrape/linkedin'),
         );
         expect(playwrightCall).toBeDefined();
         const init = (playwrightCall as unknown as [unknown, RequestInit])[1];
@@ -258,8 +256,8 @@ describe('MatchPage', () => {
 
         vi.stubGlobal(
             'fetch',
-            vi.fn(async (input: RequestInfo | URL) => {
-                if (input.toString().endsWith('/scrape/linkedin')) {
+            vi.fn(async (input: string) => {
+                if (input.endsWith('/scrape/linkedin')) {
                     playwrightCallCount++;
                     if (playwrightCallCount === 1) return staleDeferred.promise;
                     return createSseResponse(testJobs);
@@ -297,7 +295,7 @@ describe('MatchPage', () => {
         const wrapper = await mountLoadedMatchPage();
 
         const callsBefore = fetchMock.mock.calls.filter((args) =>
-            args[0].toString().endsWith('/scrape/linkedin'),
+            args[0].endsWith('/scrape/linkedin'),
         ).length;
 
         // Open and immediately close the search panel without modifying any params.
@@ -308,7 +306,7 @@ describe('MatchPage', () => {
         await wrapper.vm.$nextTick();
 
         const callsAfter = fetchMock.mock.calls.filter((args) =>
-            args[0].toString().endsWith('/scrape/linkedin'),
+            args[0].endsWith('/scrape/linkedin'),
         ).length;
 
         expect(callsAfter).toBe(callsBefore);
@@ -320,7 +318,7 @@ describe('MatchPage', () => {
         const wrapper = await mountLoadedMatchPage();
 
         const callsBefore = fetchMock.mock.calls.filter((args) =>
-            args[0].toString().endsWith('/scrape/linkedin'),
+            args[0].endsWith('/scrape/linkedin'),
         ).length;
 
         // Change datePosted in localStorage to simulate the user changing the dropdown.
@@ -334,7 +332,7 @@ describe('MatchPage', () => {
         await wrapper.vm.$nextTick();
 
         const callsAfter = fetchMock.mock.calls.filter((args) =>
-            args[0].toString().endsWith('/scrape/linkedin'),
+            args[0].endsWith('/scrape/linkedin'),
         ).length;
 
         expect(callsAfter).toBe(callsBefore + 1);
@@ -344,8 +342,8 @@ describe('MatchPage', () => {
         const deferred = createDeferred<Response>();
         vi.stubGlobal(
             'fetch',
-            vi.fn(async (input: RequestInfo | URL) => {
-                if (input.toString().endsWith('/scrape/linkedin'))
+            vi.fn(async (input: string) => {
+                if (input.endsWith('/scrape/linkedin'))
                     return deferred.promise;
                 return createJsonResponse({});
             }),

@@ -94,15 +94,6 @@ function getDatePosted(): string {
     }
 }
 
-function getMaxPages(): number {
-    try {
-        const raw = window.localStorage.getItem('jobmatch.searchmaxpages');
-        return raw !== null ? parseInt(raw, 10) || 1 : 1;
-    } catch {
-        return 1;
-    }
-}
-
 function openCoverLetter(job: ScrapedJob): void {
     activeJob.value = job;
     coverLetterOpen.value = true;
@@ -131,7 +122,6 @@ let lastFetchedParams: {
     city: string;
     distance: number;
     datePosted: string;
-    maxPages: number;
 } | null = null;
 
 function searchParamsChanged(): boolean {
@@ -140,14 +130,12 @@ function searchParamsChanged(): boolean {
         city: getCity(),
         distance: getDistance(),
         datePosted: getDatePosted(),
-        maxPages: getMaxPages(),
     };
     if (!lastFetchedParams) return true;
     return (
         cur.city !== lastFetchedParams.city ||
         cur.distance !== lastFetchedParams.distance ||
         cur.datePosted !== lastFetchedParams.datePosted ||
-        cur.maxPages !== lastFetchedParams.maxPages ||
         cur.keywords.length !== lastFetchedParams.keywords.length ||
         cur.keywords.some((k, i) => k !== lastFetchedParams!.keywords[i])
     );
@@ -159,7 +147,6 @@ async function fetchJobs(): Promise<void> {
         city: getCity(),
         distance: getDistance(),
         datePosted: getDatePosted(),
-        maxPages: getMaxPages(),
     };
     scrapeAbortController?.abort();
     scrapeAbortController = new AbortController();
@@ -178,7 +165,6 @@ async function fetchJobs(): Promise<void> {
                 location: getCity(),
                 distance: getDistance(),
                 datePosted: getDatePosted(),
-                maxPages: getMaxPages(),
             },
             signal,
         )) {

@@ -32,6 +32,15 @@ export default defineConfigWithVueTs(
     {
         ...pluginVitest.configs.recommended,
         files: ['src/**/__tests__/*'],
+        rules: {
+            ...pluginVitest.configs.recommended.rules,
+            'vitest/expect-expect': [
+                'error',
+                {
+                    assertFunctionNames: ['expect', 'expectEndpointsCalled'],
+                },
+            ],
+        },
     },
 
     skipFormatting,
