@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import ApplicationEditorPage from '@/pages/match/ApplicationEditorPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
@@ -50,12 +51,12 @@ const job: ScrapedJob = {
 };
 
 describe('ApplicationEditorPage', () => {
-    let fetchMock: ReturnType<typeof vi.fn>;
+    let fetchMock: Mock<typeof fetch>;
 
     beforeEach(() => {
         // Use mockImplementation so each call gets a fresh Response (body streams are single-use).
         fetchMock = vi
-            .fn()
+            .fn<typeof fetch>()
             .mockImplementation(() =>
                 Promise.resolve(new Response('{}', { status: 200 })),
             );
@@ -533,7 +534,7 @@ describe('ApplicationEditorPage', () => {
             await flushPromises();
 
             // first click — download starts but fetch is still pending
-            wrapper.find('.cl-download').trigger('click');
+            void wrapper.find('.cl-download').trigger('click');
             // second click — should be ignored
             await wrapper.find('.cl-download').trigger('click');
 
@@ -582,7 +583,7 @@ describe('ApplicationEditorPage', () => {
             const wrapper = mount(ApplicationEditorPage, { props: { job } });
             await flushPromises();
 
-            wrapper.find('.cl-download').trigger('click');
+            void wrapper.find('.cl-download').trigger('click');
             // unmount before the fetch resolves — should abort
             wrapper.unmount();
 
@@ -754,7 +755,7 @@ describe('ApplicationEditorPage', () => {
             await flushPromises();
 
             const dlButton = wrapper.findAll('.cl-action__dl')[0]!;
-            dlButton.trigger('click');
+            void dlButton.trigger('click');
             await dlButton.trigger('click');
 
             resolveFirst();
@@ -790,7 +791,7 @@ describe('ApplicationEditorPage', () => {
             const wrapper = mount(ApplicationEditorPage, { props: { job } });
             await flushPromises();
 
-            wrapper.findAll('.cl-action__dl')[0]!.trigger('click');
+            void wrapper.findAll('.cl-action__dl')[0]!.trigger('click');
             wrapper.unmount();
 
             rejectFetch(new DOMException('Aborted', 'AbortError'));
@@ -864,7 +865,7 @@ describe('ApplicationEditorPage', () => {
             await flushPromises();
 
             const dlButton = wrapper.findAll('.cl-action__dl')[1]!;
-            dlButton.trigger('click');
+            void dlButton.trigger('click');
             await dlButton.trigger('click');
 
             resolveFirst();
@@ -901,7 +902,7 @@ describe('ApplicationEditorPage', () => {
             const wrapper = mount(ApplicationEditorPage, { props: { job } });
             await flushPromises();
 
-            wrapper.findAll('.cl-action__dl')[1]!.trigger('click');
+            void wrapper.findAll('.cl-action__dl')[1]!.trigger('click');
             wrapper.unmount();
 
             rejectFetch(new DOMException('Aborted', 'AbortError'));
