@@ -6,7 +6,6 @@ const MAX_KEYWORDS = 5;
 const CITY_STORAGE_KEY = 'jobmatch.searchcity';
 const DISTANCE_STORAGE_KEY = 'jobmatch.searchdistance';
 const DATE_POSTED_STORAGE_KEY = 'jobmatch.searchdateposted';
-const MAX_PAGES_STORAGE_KEY = 'jobmatch.searchmaxpages';
 
 const props = defineProps<{ keywords: string[] }>();
 const emit = defineEmits<{
@@ -28,7 +27,6 @@ const distance = ref(loadFromStorage(DISTANCE_STORAGE_KEY));
 const datePosted = ref(
     loadFromStorage(DATE_POSTED_STORAGE_KEY) || DEFAULT_DATE_POSTED,
 );
-const maxPages = ref(loadFromStorage(MAX_PAGES_STORAGE_KEY) || '1');
 const saveState = ref<'idle' | 'saving' | 'saved'>('idle');
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -85,17 +83,6 @@ function onDatePostedChange(event: Event) {
     datePosted.value = v;
     try {
         window.localStorage.setItem(DATE_POSTED_STORAGE_KEY, v);
-    } catch {}
-    markSaving();
-}
-
-function onMaxPagesChange(event: Event) {
-    const el = event.target as HTMLInputElement;
-    const v = el.value.replace(/[^0-9]/g, '').slice(0, 2);
-    maxPages.value = v;
-    el.value = v;
-    try {
-        window.localStorage.setItem(MAX_PAGES_STORAGE_KEY, v);
     } catch {}
     markSaving();
 }
@@ -314,29 +301,6 @@ const hint = computed(() =>
             </select>
             <p class="se-help">
                 Only show jobs posted within this time window.
-            </p>
-
-            <label
-                class="se-field-label se-field-label--spaced"
-                for="se-max-pages"
-            >
-                Max pages <span class="se-field-label__opt">(per keyword)</span>
-            </label>
-            <div class="se-num">
-                <input
-                    id="se-max-pages"
-                    class="se-num__input"
-                    type="text"
-                    inputmode="numeric"
-                    :value="maxPages"
-                    autocomplete="off"
-                    placeholder="1"
-                    @input="onMaxPagesChange"
-                />
-            </div>
-            <p class="se-help">
-                Number of result pages to scrape per keyword. Set to 0 for no
-                limit.
             </p>
         </div>
 
