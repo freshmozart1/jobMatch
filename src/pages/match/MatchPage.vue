@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { BrandBar, JobCardStack, MatchFilterBar } from '@/components';
 import ApplicationEditorPage from './ApplicationEditorPage.vue';
 import MatchEmpty from './MatchEmpty.vue';
@@ -202,6 +202,10 @@ async function fetchJobs(): Promise<void> {
         }
     }
 }
+
+onUnmounted(() => {
+    scrapeAbortController?.abort();
+});
 
 onMounted(() => {
     if (keywords.value.length > 0) void fetchJobs();

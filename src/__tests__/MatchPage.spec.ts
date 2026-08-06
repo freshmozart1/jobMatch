@@ -252,6 +252,31 @@ describe('MatchPage', () => {
         expect(init.signal).toBeInstanceOf(AbortSignal);
     });
 
+    it('aborts the in-flight scrape when the component is unmounted', async () => {
+        const fetchMock = mockFetch();
+
+        const wrapper = mount(MatchPage);
+
+        await vi.waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some((args) =>
+                    args[0].toString().endsWith('/scrape/linkedin'),
+                ),
+            ).toBe(true);
+        });
+
+        const playwrightCall = fetchMock.mock.calls.find((args) =>
+            args[0].toString().endsWith('/scrape/linkedin'),
+        );
+        expect(playwrightCall).toBeDefined();
+        const init = (playwrightCall as unknown as [unknown, RequestInit])[1];
+        const signal = init.signal as AbortSignal;
+
+        wrapper.unmount();
+
+        expect(signal.aborted).toBe(true);
+    });
+
     it('discards a stale playwright response when a new search supersedes it', async () => {
         const staleDeferred = createDeferred<Response>();
         let playwrightCallCount = 0;
