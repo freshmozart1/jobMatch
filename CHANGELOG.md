@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.1.2
+
+### Fixed
+
+- `MatchPage.vue`'s `fetchJobs()` only aborted the previous scrape's `AbortController` when a new search superseded it, never on component teardown, so navigating away from or reloading MatchPage while `/scrape/linkedin` was still streaming left the backend scrape run orphaned. Added an `onUnmounted` hook that calls `scrapeAbortController?.abort()` so leaving the page always cancels the in-flight scrape (closes #50).
+
 ## v0.1.1
 
 ### Fixed
