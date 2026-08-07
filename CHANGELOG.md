@@ -2,11 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
-## v0.1.2
+## v0.2.1
 
 ### Fixed
 
 - `MatchPage.vue`'s `fetchJobs()` only aborted the previous scrape's `AbortController` when a new search superseded it, never on component teardown, so navigating away from or reloading MatchPage while `/scrape/linkedin` was still streaming left the backend scrape run orphaned. Added an `onUnmounted` hook that calls `scrapeAbortController?.abort()` so leaving the page always cancels the in-flight scrape (closes #50).
+
+## v0.2.0
+
+### Removed
+
+- The "Max pages" search option was removed since the backend no longer supports it. `MatchPage.vue`'s `getMaxPages()` (which read `localStorage['jobmatch.searchmaxpages']`) and every `maxPages` reference — the `lastFetchedParams` field, the `searchParamsChanged()` comparison, and the `POST /scrape/linkedin` request body field — were deleted. `SearchPage.vue`'s `MAX_PAGES_STORAGE_KEY`, the `maxPages` ref, `onMaxPagesChange()`, and the "Max pages" label/input/help-text template block were also removed (closes #44).
 
 ## v0.1.1
 
