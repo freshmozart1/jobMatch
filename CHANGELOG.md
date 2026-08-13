@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.2.2
+
+### Fixed
+
+- `ScrapedJob` (`src/components/jobCard/types.ts`) had `descriptionText` typed as required, but the backend's `/scrape/linkedin` stream intentionally omits the field entirely when a scraped job's description is empty, whitespace-only, or a LinkedIn login/legal modal that leaked through instead of real content. Changed `descriptionText` back to optional to match the backend's type; every consumer already defensively checked for the field, so nothing else changes at runtime. This reverts the `descriptionText` part of v0.1.0's change to this type, which had assumed the backend always populates it (closes freshmozart1/jobMatchServer#83).
+
 ## v0.2.1
 
 ### Fixed
