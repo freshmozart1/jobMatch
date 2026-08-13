@@ -12,7 +12,7 @@ export type ScrapedJob = {
     title: string;
     company: string;
     location: string;
-    descriptionText: string;
+    descriptionText?: string;
     postedAt: string;
     scrapedAt: string;
     tags: string[];
