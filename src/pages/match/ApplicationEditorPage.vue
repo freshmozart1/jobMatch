@@ -330,19 +330,13 @@ async function generateCoverLetter() {
     if (generating.value) return;
     generating.value = true;
     const keyAtStart = props.job.duplicateKey;
+    // The endpoint never used the embedding — strip it from the request body.
     const { embedding, ...jobData } = props.job;
+    void embedding;
     try {
-        const { coverLetterIds } = await postJson<{ coverLetterIds: string[] }>(
-            '/jobs/top-x-similar-cover-letters',
-            { embedding, x: 3 },
-        );
-        if (keyAtStart !== props.job.duplicateKey) return;
         const { coverLetter } = await postJson<{ coverLetter: string }>(
             '/cover-letters/create/text',
-            {
-                ...jobData,
-                coverLetterIds,
-            },
+            jobData,
         );
         if (keyAtStart !== props.job.duplicateKey) return;
         onChange(coverLetter);
