@@ -359,6 +359,115 @@ describe('ApplicationEditorPage', () => {
         );
     });
 
+    // --- generate cover letter ---
+
+    // The default beforeEach fetch mock resolves '{}' for every request, which
+    // would leave `coverLetter` undefined and break the component's word-count
+    // computed. Give /cover-letters/create/text a real body wherever the test
+    // doesn't care about its content, matching how other describe blocks scope
+    // their mocks to the endpoint under test. `status`/`responseBody` let the
+    // failure test reuse this instead of duplicating the URL-branching mock.
+    function mockGenerateResponse(
+        responseBody: Record<string, unknown> = { coverLetter: 'Generated text' },
+        status = 200,
+    ) {
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+            const url = input as string;
+            if (url.includes('/cover-letters/create/text')) {
+                return Promise.resolve(
+                    new Response(JSON.stringify(responseBody), { status }),
+                );
+            }
+            return Promise.resolve(new Response('{}', { status: 200 }));
+        });
+    }
+
+    // onChange schedules a save on success; let the debounce settle so no
+    // pending timers leak into other tests.
+    async function drainUploadTimer() {
+        await vi.runAllTimersAsync();
+        await flushPromises();
+    }
+
+    // Shared happy-path setup for the tests below: open the editor, mock a
+    // successful generate response, clear the mount-time fetch calls, then
+    // click generate and let it settle.
+    async function mountAndGenerate() {
+        const wrapper = await mountAndOpen();
+        mockGenerateResponse();
+        fetchMock.mockClear();
+        await wrapper.find('.cl-generate').trigger('click');
+        await flushPromises();
+        return wrapper;
+    }
+
+    describe('generate cover letter', () => {
+        it('calls POST /cover-letters/create/text exactly once with the job fields, and without embedding, coverLetterIds, or x', async () => {
+            await mountAndGenerate();
+
+            const calls = fetchMock.mock.calls.filter((c: unknown[]) =>
+                (c[0] as string).includes('/cover-letters/create/text'),
+            );
+            expect(calls).toHaveLength(1);
+
+            const body = JSON.parse(
+                (calls[0]![1] as RequestInit).body as string,
+            );
+            expect(body.title).toBe(job.title);
+            expect(body.company).toBe(job.company);
+            expect(body.duplicateKey).toBe(job.duplicateKey);
+            expect(body).not.toHaveProperty('embedding');
+            expect(body).not.toHaveProperty('coverLetterIds');
+            expect(body).not.toHaveProperty('x');
+
+            await drainUploadTimer();
+        });
+
+        it('does not call /jobs/top-x-similar-cover-letters', async () => {
+            await mountAndGenerate();
+
+            const urls = getCalledUrls();
+            expect(
+                urls.some((u) => u.includes('/jobs/top-x-similar-cover-letters')),
+            ).toBe(false);
+
+            await drainUploadTimer();
+        });
+
+        it('fills the textarea with the generated cover letter on success', async () => {
+            const wrapper = await mountAndGenerate();
+
+            expect(
+                (wrapper.find('.cl-textarea').element as HTMLTextAreaElement)
+                    .value,
+            ).toBe('Generated text');
+
+            await drainUploadTimer();
+        });
+
+        it('logs console.error and leaves the textarea unchanged when the request fails', async () => {
+            const consoleError = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
+            const wrapper = await mountAndOpen();
+            mockGenerateResponse({ error: 'Server error' }, 500);
+
+            await wrapper.find('.cl-generate').trigger('click');
+            await flushPromises();
+
+            expect(consoleError).toHaveBeenCalledWith(
+                'Failed to generate cover letter:',
+                'Server error',
+            );
+            expect(
+                (wrapper.find('.cl-textarea').element as HTMLTextAreaElement)
+                    .value,
+            ).toBe('');
+
+            consoleError.mockRestore();
+        });
+    });
+
     // --- CV upload ---
 
     async function selectCvFile(wrapper: ReturnType<typeof mount>, file: File) {
