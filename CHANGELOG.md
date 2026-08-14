@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.2.2
+
+### Fixed
+
+- `ApplicationEditorPage.vue`'s `generateCoverLetter()` made two sequential calls — `POST /jobs/top-x-similar-cover-letters` (to rank stored cover letters and get back `coverLetterIds`) followed by `POST /cover-letters/create/text` (passing those IDs in to generate the letter) — but the backend removed `/jobs/top-x-similar-cover-letters` after folding its ranking logic directly into `/cover-letters/create/text`, so the first call now 404s and cover letter generation was completely broken. Changed `generateCoverLetter()` to make a single `POST /cover-letters/create/text` call with the job's fields (`embedding` stripped, since the endpoint never used it), omitting the `coverLetterIds` step and the `x` parameter entirely (the backend defaults `x` to `3`, matching the old hardcoded frontend value) (closes #53).
+
 ## v0.2.1
 
 ### Fixed
