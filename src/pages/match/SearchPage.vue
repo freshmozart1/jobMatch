@@ -505,6 +505,7 @@ const hint = computed(() =>
 .se-num {
     display: flex;
     align-items: stretch;
+    flex-shrink: 0;
     border: 1px solid var(--border-color);
     border-radius: 12px;
     background: #fff;
