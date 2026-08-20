@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.2.4
+
+### Fixed
+
+- `MatchPage.vue`'s `fetchJobs()` pushed every streamed `ScrapedJob` event straight into `jobs.value`, but the backend's `/scrape/linkedin` stream sends the same job once per matching search keyword, so a job matching multiple keywords produced multiple entries with the same `duplicateKey`. `JobCardStack.vue` keys its `JobCard`s by `duplicateKey`, so the duplicate entries shared a Vue `:key`, causing the swipe card to reuse stale internal drag state and making the deck appear to "eat" cards and get stuck/unresponsive. Added a `Set<string>` (`seenDuplicateKeys`) in `fetchJobs()` that skips any event whose `duplicateKey` was already seen before pushing, so each unique job appears exactly once in the deck (closes #47).
+
 ## v0.2.3
 
 ### Fixed
