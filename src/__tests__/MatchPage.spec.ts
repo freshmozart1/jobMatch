@@ -368,8 +368,7 @@ describe('MatchPage', () => {
         vi.stubGlobal(
             'fetch',
             vi.fn(async (input: string) => {
-                if (input.endsWith('/scrape/linkedin'))
-                    return deferred.promise;
+                if (input.endsWith('/scrape/linkedin')) return deferred.promise;
                 return createJsonResponse({});
             }),
         );
@@ -447,7 +446,9 @@ describe('MatchPage', () => {
         // already-offscreen duplicate reusing the same Vue :key.
         const container = wrapper.findComponent(JobCardContainer);
         expect(container.exists()).toBe(true);
-        expect(container.props('job')).toMatchObject({ title: testJobs[1]!.title });
+        expect(container.props('job')).toMatchObject({
+            title: testJobs[1]!.title,
+        });
 
         // And it must still be interactive: a real swipe advances the deck to empty.
         swipeTopCard(wrapper);
