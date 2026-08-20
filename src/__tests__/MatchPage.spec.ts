@@ -110,6 +110,24 @@ async function mountWithFirstJobStreamed() {
     return { wrapper, stream };
 }
 
+async function mountWithDeduplicatedJobStreamed() {
+    const duplicateOfFirstJob: ScrapedJob = {
+        ...testJobs[0]!,
+        title: 'Full Stack Engineer (Duplicate Listing)',
+    };
+    const { wrapper, stream } = await mountWithFirstJobStreamed();
+
+    stream.push(duplicateOfFirstJob);
+    stream.push(testJobs[1]);
+    stream.close();
+
+    await vi.waitFor(() => {
+        expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
+    });
+
+    return { wrapper, stream };
+}
+
 function createDeferred<T>() {
     let resolve!: (value: T) => void;
     let reject!: (reason?: unknown) => void;
@@ -403,19 +421,7 @@ describe('MatchPage', () => {
     });
 
     it('collapses a duplicate streamed job (same duplicateKey) into a single deck entry', async () => {
-        const duplicateOfFirstJob: ScrapedJob = {
-            ...testJobs[0]!,
-            title: 'Full Stack Engineer (Duplicate Listing)',
-        };
-        const { wrapper, stream } = await mountWithFirstJobStreamed();
-
-        stream.push(duplicateOfFirstJob);
-        stream.push(testJobs[1]);
-        stream.close();
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
-        });
+        const { wrapper } = await mountWithDeduplicatedJobStreamed();
 
         // Three events were streamed but only two unique jobs (by duplicateKey) —
         // the deck must empty after exactly two swipes, not three.
@@ -424,19 +430,7 @@ describe('MatchPage', () => {
     });
 
     it('keeps the next card interactive and correct after swiping past a deduplicated job', async () => {
-        const duplicateOfFirstJob: ScrapedJob = {
-            ...testJobs[0]!,
-            title: 'Full Stack Engineer (Duplicate Listing)',
-        };
-        const { wrapper, stream } = await mountWithFirstJobStreamed();
-
-        stream.push(duplicateOfFirstJob);
-        stream.push(testJobs[1]);
-        stream.close();
-
-        await vi.waitFor(() => {
-            expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
-        });
+        const { wrapper } = await mountWithDeduplicatedJobStreamed();
 
         // Swipe away the (deduplicated) first card.
         swipeTopCard(wrapper);
