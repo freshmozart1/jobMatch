@@ -110,6 +110,24 @@ async function mountWithFirstJobStreamed() {
     return { wrapper, stream };
 }
 
+async function mountWithDeduplicatedJobStreamed() {
+    const duplicateOfFirstJob: ScrapedJob = {
+        ...testJobs[0]!,
+        title: 'Full Stack Engineer (Duplicate Listing)',
+    };
+    const { wrapper, stream } = await mountWithFirstJobStreamed();
+
+    stream.push(duplicateOfFirstJob);
+    stream.push(testJobs[1]);
+    stream.close();
+
+    await vi.waitFor(() => {
+        expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
+    });
+
+    return { wrapper, stream };
+}
+
 function createDeferred<T>() {
     let resolve!: (value: T) => void;
     let reject!: (reason?: unknown) => void;
@@ -368,8 +386,7 @@ describe('MatchPage', () => {
         vi.stubGlobal(
             'fetch',
             vi.fn(async (input: string) => {
-                if (input.endsWith('/scrape/linkedin'))
-                    return deferred.promise;
+                if (input.endsWith('/scrape/linkedin')) return deferred.promise;
                 return createJsonResponse({});
             }),
         );
@@ -401,6 +418,37 @@ describe('MatchPage', () => {
         });
 
         stream.close();
+    });
+
+    it('collapses a duplicate streamed job (same duplicateKey) into a single deck entry', async () => {
+        const { wrapper } = await mountWithDeduplicatedJobStreamed();
+
+        // Three events were streamed but only two unique jobs (by duplicateKey) —
+        // the deck must empty after exactly two swipes, not three.
+        await swipeAllCards(wrapper, 2);
+        expect(wrapper.find('.job-card-stack__empty').exists()).toBe(true);
+    });
+
+    it('keeps the next card interactive and correct after swiping past a deduplicated job', async () => {
+        const { wrapper } = await mountWithDeduplicatedJobStreamed();
+
+        // Swipe away the (deduplicated) first card.
+        swipeTopCard(wrapper);
+        await wrapper.vm.$nextTick();
+
+        // The next card must be the genuinely distinct second job — not a stale,
+        // already-offscreen duplicate reusing the same Vue :key.
+        const container = wrapper.findComponent(JobCardContainer);
+        expect(container.exists()).toBe(true);
+        expect(container.props('job')).toMatchObject({
+            title: testJobs[1]!.title,
+        });
+
+        // And it must still be interactive: a real swipe advances the deck to empty.
+        swipeTopCard(wrapper);
+        await wrapper.vm.$nextTick();
+        expect(wrapper.find('.job-card-stack__current').exists()).toBe(false);
+        expect(wrapper.find('.job-card-stack__empty').exists()).toBe(true);
     });
 
     it('surfaces a per-scrape SSE error frame as an error message', async () => {
