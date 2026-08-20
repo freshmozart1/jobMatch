@@ -156,6 +156,7 @@ async function fetchJobs(): Promise<void> {
     isLoading.value = true;
     jobs.value = [];
     errorMessage.value = null;
+    const seenDuplicateKeys = new Set<string>();
 
     try {
         for await (const event of postJsonEventStream<ScrapeStreamEvent>(
@@ -173,6 +174,8 @@ async function fetchJobs(): Promise<void> {
                 errorMessage.value = event.error;
                 continue;
             }
+            if (seenDuplicateKeys.has(event.duplicateKey)) continue;
+            seenDuplicateKeys.add(event.duplicateKey);
             jobs.value.push(event);
         }
     } catch (error) {
