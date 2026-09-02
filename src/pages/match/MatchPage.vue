@@ -151,6 +151,22 @@ function searchParamsChanged(): boolean {
     );
 }
 
+// One frame of the scrape stream: an error frame updates the banner without
+// ending the scrape, and a job frame is kept only the first time its
+// duplicateKey is seen.
+function applyScrapeEvent(
+    event: ScrapeStreamEvent,
+    seenDuplicateKeys: Set<string>,
+): void {
+    if (isScrapeErrorEvent(event)) {
+        errorMessage.value = event.error;
+        return;
+    }
+    if (seenDuplicateKeys.has(event.duplicateKey)) return;
+    seenDuplicateKeys.add(event.duplicateKey);
+    jobs.value.push(event);
+}
+
 async function fetchJobs(): Promise<void> {
     lastFetchedParams = {
         keywords: [...keywords.value],
@@ -181,13 +197,7 @@ async function fetchJobs(): Promise<void> {
             signal,
         )) {
             if (scrapeGeneration !== myGeneration) return;
-            if (isScrapeErrorEvent(event)) {
-                errorMessage.value = event.error;
-                continue;
-            }
-            if (seenDuplicateKeys.has(event.duplicateKey)) continue;
-            seenDuplicateKeys.add(event.duplicateKey);
-            jobs.value.push(event);
+            applyScrapeEvent(event, seenDuplicateKeys);
         }
     } catch (error) {
         // An abort is either a user-requested stop or a superseded scrape —
