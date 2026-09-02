@@ -35,7 +35,7 @@ defineEmits<{ edit: [] }>();
         <button
             type="button"
             class="like-container__button like-container__button--edit"
-            aria-label="Write cover letter"
+            aria-label="Open application editor"
             @click="$emit('edit')"
         >
             <svg
