@@ -28,6 +28,17 @@ to be running for jobMatch to do anything. See
   and a "date posted" window (past 24 hours / week / month)
   (`src/pages/match/SearchPage.vue`). Everything is persisted in `localStorage`,
   so your search survives a reload, and changing it re-runs the scrape.
+- **Stop a running search** — a scrape can take minutes, so both loading states
+  carry a Cancel button (`src/components/CancelScrapeButton.vue`): the
+  full-area "Loading jobs..." state on the match page, and the "Loading more
+  jobs..." state of the deck itself, which you reach by swiping through the
+  jobs that already arrived while the scrape is still running. Cancelling
+  aborts the in-flight `POST /scrape/linkedin` request, keeps every job
+  streamed in so far on screen and swipeable, and settles into "Search
+  stopped" rather than an error — stopping a scrape on purpose is not a
+  failure. The stopped search stays re-runnable as it is: opening the search
+  sheet and closing it again starts the same search over, without having to
+  change a parameter first.
 - **Match score** — cards the backend scored carry a cosine-similarity meter
   comparing the ad to your keywords
   (`src/components/jobCard/JobCardCosineSimilarity.vue`); a job that arrives
@@ -193,8 +204,8 @@ src/
 ├── main.ts         App entry point — creates the Vue app and mounts it
 ├── App.vue         Root component
 ├── pages/          Route-level views (match deck, search, application editor)
-├── components/     Job cards, brand bar, match filter, application editor,
-│                   cover letter and CV UI
+├── components/     Job cards, brand bar, match filter, scrape cancel,
+│                   application editor, cover letter and CV UI
 ├── lib/            API client (base URL resolution, JSON/SSE/blob helpers)
 ├── constants/      CSS custom properties for colors, layout and typography
 ├── router/         vue-router setup
