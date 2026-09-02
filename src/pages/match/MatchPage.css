@@ -62,13 +62,18 @@
     }
 }
 
-/* Cover letter fly-in overlay */
+/* Fly-in overlay — shared by the Application Editor and the Search page.
+   `visibility` is what keeps a closed overlay out of the accessibility tree and
+   the keyboard tab order; `opacity` and `pointer-events` alone leave its
+   controls focusable and announced. It flips back to `hidden` only after the
+   fly-out has finished, so the closing animation still plays. */
 .overlay {
     position: fixed;
     inset: 0;
     z-index: 40;
     transform-origin: center center;
     transform: translateX(115%) rotate(7deg) scale(0.6);
+    visibility: hidden;
     opacity: 0;
     border-radius: var(--job-card-border-radius);
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
@@ -77,18 +82,21 @@
     transition:
         transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
         opacity 0.3s ease,
-        border-radius 0.4s ease;
+        border-radius 0.4s ease,
+        visibility 0s linear 0.4s;
 }
 
 .overlay--open {
     transform: none;
+    visibility: visible;
     opacity: 1;
     border-radius: 0;
     pointer-events: auto;
-    animation: cl-fly-in 0.66s cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition-delay: 0s;
+    animation: overlay-fly-in 0.66s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-@keyframes cl-fly-in {
+@keyframes overlay-fly-in {
     0% {
         transform: translateX(115%) rotate(7deg) scale(0.6);
         opacity: 0.35;
@@ -107,10 +115,13 @@
 
 @media (prefers-reduced-motion: reduce) {
     .overlay {
-        transition: opacity 0.2s ease;
+        transition:
+            opacity 0.2s ease,
+            visibility 0s linear 0.2s;
         transform: none;
     }
     .overlay--open {
         animation: none;
+        transition-delay: 0s;
     }
 }

@@ -491,6 +491,20 @@ describe('MatchPage', () => {
         );
     });
 
+    it('opens the Application Editor overlay for the top card when the pencil button is clicked', async () => {
+        const wrapper = await mountLoadedMatchPage();
+        const overlay = () => wrapper.findAll('.overlay')[0]!;
+
+        expect(overlay().classes()).not.toContain('overlay--open');
+
+        await wrapper.find('.like-container__button--edit').trigger('click');
+
+        expect(overlay().classes()).toContain('overlay--open');
+        expect(overlay().find('.cl-header__title').text()).toBe(
+            'Application Editor',
+        );
+    });
+
     it('renders the mobile layout anchors for the card stack and sticky controls', async () => {
         const wrapper = await mountLoadedMatchPage();
 

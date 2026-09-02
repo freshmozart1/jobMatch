@@ -24,7 +24,7 @@ const matchFilterOn = ref(false);
 const matchThreshold = ref(50);
 const keywords = ref<string[]>(loadKeywords());
 const searchOpen = ref(false);
-const coverLetterOpen = ref(false);
+const applicationEditorOpen = ref(false);
 const activeJob = ref<ScrapedJob | null>(null);
 
 const matchEnabled = computed(() => keywords.value.length > 0);
@@ -94,13 +94,13 @@ function getDatePosted(): string {
     }
 }
 
-function openCoverLetter(job: ScrapedJob): void {
+function openApplicationEditor(job: ScrapedJob): void {
     activeJob.value = job;
-    coverLetterOpen.value = true;
+    applicationEditorOpen.value = true;
 }
 
-function closeCoverLetter(): void {
-    coverLetterOpen.value = false;
+function closeApplicationEditor(): void {
+    applicationEditorOpen.value = false;
 }
 
 async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
@@ -236,7 +236,7 @@ watch(searchOpen, (open) => {
                     :empty-label="emptyLabel"
                     :is-loading="isLoading"
                     @like="createJob"
-                    @edit="openCoverLetter"
+                    @edit="openApplicationEditor"
                 />
             </template>
             <div v-else class="match-status-fill">
@@ -244,11 +244,11 @@ watch(searchOpen, (open) => {
             </div>
         </template>
 
-        <div :class="['overlay', { 'overlay--open': coverLetterOpen }]">
+        <div :class="['overlay', { 'overlay--open': applicationEditorOpen }]">
             <ApplicationEditorPage
                 v-if="activeJob"
                 :job="activeJob"
-                @back="closeCoverLetter"
+                @back="closeApplicationEditor"
             />
         </div>
 

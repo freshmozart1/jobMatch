@@ -24,7 +24,7 @@ describe('LikeContainer', () => {
         const labels = wrapper
             .findAll('.like-container__button')
             .map((button) => button.attributes('aria-label'));
-        expect(labels).toEqual(['Dislike', 'Write cover letter', 'Like']);
+        expect(labels).toEqual(['Dislike', 'Open application editor', 'Like']);
     });
 
     it('defaults both thumb controls to 0.33 opacity', () => {
