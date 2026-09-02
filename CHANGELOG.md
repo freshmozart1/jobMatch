@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.2.6
+
+### Removed
+
+- The path alias configuration was split across two files that disagreed: `vite.config.ts`'s `resolve.alias` defined four aliases (`@`, `@pages`, `@components`, `@assets`) while `tsconfig.app.json`'s `compilerOptions.paths` mapped only two (`@/*` and `@pages`). An import through `@components` or `@assets` therefore bundled fine via `npm run dev` / `npm run build` and then failed `npm run type-check` (`vue-tsc --build`) with "Cannot find module" — a trap for anyone who read `vite.config.ts` and assumed all four were usable, and one that v0.2.5's README documented as a caveat instead of fixing. Neither alias was needed: nothing in `src/` or `e2e/` imported through them, `@/components` and `@/assets` already cover both via the `@/*` mapping that _is_ type-checked, and `src/assets` does not exist, so `@assets` pointed at a missing directory. Deleted the `@components` and `@assets` entries from `resolve.alias`, leaving `@` and `@pages` — the two that `tsconfig.app.json` maps. Adding them to `tsconfig.app.json` instead was rejected: it keeps two redundant spellings for the same import and would map `@assets` to a directory that doesn't exist. Updated the "Path aliases" section of `README.md` and the "Path Aliases" list in `CLAUDE.md` to the two supported aliases, recorded that the aliases apply to `src/` only (`e2e/` compiles against `e2e/tsconfig.json` and the root config files against `tsconfig.node.json`, neither of which has a `paths` mapping), and noted in both `README.md` and `vite.config.ts` that any future alias must be added to `vite.config.ts` and `tsconfig.app.json` together so the two cannot drift apart again. External behavior is unchanged; the bundle output is identical (closes #61).
+
 ## v0.2.5
 
 ### Changed

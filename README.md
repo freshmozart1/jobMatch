@@ -179,12 +179,21 @@ src/
 ### Path aliases
 
 Both are resolved by Vite (`vite.config.ts`) and mapped in `tsconfig.app.json`,
-so imports through them bundle and type-check alike:
+so `src/` imports through them bundle and type-check alike:
 
 | Alias    | Resolves to          |
 | -------- | -------------------- |
 | `@/*`    | `src/*`              |
 | `@pages` | `src/pages/index.ts` |
+
+They cover `src/` only. `tsconfig.app.json` is the project's only `paths`
+mapping, so the Playwright specs (compiled against `e2e/tsconfig.json`) and the
+root config files (`tsconfig.node.json`) have no aliases and must use relative
+imports.
+
+A third alias has to be added in **both** places. Vite alone is enough to
+bundle it, but without the matching `tsconfig.app.json` entry the import fails
+`npm run type-check` with "Cannot find module".
 
 ## Further reading
 
