@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.2.5
+
+### Changed
+
+- `README.md` was still the untouched `create-vue` scaffold — it opened with "This template should help get you started developing with Vue 3 in Vite", documented generic Vite/Vitest/Playwright/ESLint steps, and never said what jobMatch is. Worse, it never mentioned that the app is a frontend only: every call in `src/lib/api.ts` goes to a separate backend, [jobMatchServer](https://github.com/freshmozart1/jobMatchServer), whose base URL is read from `VITE_JOB_MATCH_SERVER_URL` and otherwise falls back to `http://<current hostname>:3000`. A reader who followed the scaffold's `npm install` / `npm run dev` therefore ended up with an app that renders but does nothing, with no hint as to why. Rewrote the README as jobMatch documentation: what the app does (a swipe deck of freshly scraped LinkedIn ads, ranked by cosine similarity against your search keywords, turned into an AI-drafted cover letter that merges with your CV into a single application PDF), a feature list pointing at the components that implement each part, and a prominent "Backend — required" section covering the base URL resolution, the `.env.local` setup, the fact that `VITE_*` variables are inlined at build time rather than read at runtime, and the order in which to start the server and the frontend. Added a full command table that documents `format` and `preview` — both previously undocumented — alongside the scripts the scaffold already listed, testing instructions for Vitest and Playwright that spell out the dev/CI base URL split, the project layout, and a path alias table recording that `@components` and `@assets` resolve in `vite.config.ts` but are missing from `tsconfig.app.json`'s `paths`, so importing through them builds and then fails `npm run type-check`. Added two screenshots under `docs/screenshots/` (the match page and the cover letter editor) captured from the real UI at a phone viewport, and dropped the scaffold boilerplate that no longer applied. Documentation only; no source or configuration changed (closes #56).
+
 ## v0.2.4
 
 ### Fixed
