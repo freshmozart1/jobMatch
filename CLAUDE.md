@@ -28,8 +28,6 @@ npm run test:e2e     # Playwright e2e tests
 
 - `@/*` → `src/*`
 - `@pages` → `src/pages/index.ts`
-- `@components` → `src/components`
-- `@assets` → `src/assets`
 
 ## Playwright (e2e)
 

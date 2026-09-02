@@ -204,17 +204,22 @@ src/
 
 ### Path aliases
 
-All four are resolved by Vite (`vite.config.ts`), but only `@/*` and `@pages`
-are mapped in `tsconfig.app.json`. Importing through `@components` or
-`@assets` therefore builds fine and then fails `npm run type-check`, so prefer
-`@/components` and `@/assets`:
+Both are resolved by Vite (`vite.config.ts`) and mapped in `tsconfig.app.json`,
+so `src/` imports through them bundle and type-check alike:
 
-| Alias         | Resolves to          | Type-checked | Note                           |
-| ------------- | -------------------- | ------------ | ------------------------------ |
-| `@/*`         | `src/*`              | yes          |                                |
-| `@pages`      | `src/pages/index.ts` | yes          |                                |
-| `@components` | `src/components`     | no           | prefer `@/components`          |
-| `@assets`     | `src/assets`         | no           | directory does not exist (yet) |
+| Alias    | Resolves to          |
+| -------- | -------------------- |
+| `@/*`    | `src/*`              |
+| `@pages` | `src/pages/index.ts` |
+
+They cover `src/` only. `tsconfig.app.json` is the project's only `paths`
+mapping, so the Playwright specs (compiled against `e2e/tsconfig.json`) and the
+root config files (`tsconfig.node.json`) have no aliases and must use relative
+imports.
+
+A third alias has to be added in **both** places. Vite alone is enough to
+bundle it, but without the matching `tsconfig.app.json` entry the import fails
+`npm run type-check` with "Cannot find module".
 
 ## Further reading
 
