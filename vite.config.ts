@@ -13,10 +13,6 @@ export default defineConfig({
             '@pages': fileURLToPath(
                 new URL('./src/pages/index.ts', import.meta.url),
             ),
-            '@components': fileURLToPath(
-                new URL('./src/components', import.meta.url),
-            ),
-            '@assets': fileURLToPath(new URL('./src/assets', import.meta.url)),
         },
     },
 });

@@ -178,17 +178,13 @@ src/
 
 ### Path aliases
 
-All four are resolved by Vite (`vite.config.ts`), but only `@/*` and `@pages`
-are mapped in `tsconfig.app.json`. Importing through `@components` or
-`@assets` therefore builds fine and then fails `npm run type-check`, so prefer
-`@/components` and `@/assets`:
+Both are resolved by Vite (`vite.config.ts`) and mapped in `tsconfig.app.json`,
+so imports through them bundle and type-check alike:
 
-| Alias         | Resolves to          | Type-checked | Note                           |
-| ------------- | -------------------- | ------------ | ------------------------------ |
-| `@/*`         | `src/*`              | yes          |                                |
-| `@pages`      | `src/pages/index.ts` | yes          |                                |
-| `@components` | `src/components`     | no           | prefer `@/components`          |
-| `@assets`     | `src/assets`         | no           | directory does not exist (yet) |
+| Alias    | Resolves to          |
+| -------- | -------------------- |
+| `@/*`    | `src/*`              |
+| `@pages` | `src/pages/index.ts` |
 
 ## Further reading
 
