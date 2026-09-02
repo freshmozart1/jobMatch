@@ -14,9 +14,9 @@ to be running for jobMatch to do anything. See
 
 ## Screenshots
 
-| Match page                                                                                                                                         | Cover letter editor                                                                                                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Swipeable job card with a match meter, tags and the job description, above the dislike, edit and like controls](docs/screenshots/match-page.png) | ![Cover letter editor showing the job the letter is written for, a full draft in the text area, the save status, the AI generate button and a word count](docs/screenshots/application-editor.png) |
+| Match page                                                                                                                                                                      | Cover letter editor                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Swipeable job card with a match meter, tags and the job description, above the dislike and like drag indicators and the cover letter button](docs/screenshots/match-page.png) | ![Cover letter editor showing the job the letter is written for, a full draft in the text area, the save status, the AI generate button and a word count](docs/screenshots/application-editor.png) |
 
 ## Features
 
@@ -28,18 +28,20 @@ to be running for jobMatch to do anything. See
   and a "date posted" window (past 24 hours / week / month)
   (`src/pages/match/SearchPage.vue`). Everything is persisted in `localStorage`,
   so your search survives a reload, and changing it re-runs the scrape.
-- **Match score** — every card carries a cosine-similarity meter comparing the
-  ad to your keywords
-  (`src/components/jobCard/JobCardCosineSimilarity.vue`). A filter bar lets you
+- **Match score** — cards the backend scored carry a cosine-similarity meter
+  comparing the ad to your keywords
+  (`src/components/jobCard/JobCardCosineSimilarity.vue`); a job that arrives
+  without a `match` value simply renders without one. A filter bar lets you
   hide everything below an adjustable threshold
   (`src/components/MatchFilterBar.vue`).
-- **Application editor** — every card opens an editor
-  (`src/pages/match/ApplicationEditorPage.vue`) with the job it belongs to kept
-  in view. Generate a cover letter tailored to that job with one tap, then edit
-  it by hand — drafts auto-save to `localStorage` and upload to the server
-  (`src/components/coverLetter/CoverLetterEditor.vue`). The same editor's menu
-  lets you attach your CV as a PDF, and download the cover letter, the CV, or
-  both merged into a single application PDF
+- **Application editor** — the pencil button below the deck opens an editor for
+  the card on top (`src/pages/match/ApplicationEditorPage.vue`) with the job it
+  belongs to kept in view. Generate a cover letter tailored to that job with one
+  tap, then edit it by hand — drafts auto-save to `localStorage` and upload to
+  the server (both live in `ApplicationEditorPage.vue`; the editor itself,
+  `src/components/coverLetter/CoverLetterEditor.vue`, is presentational). The
+  same editor's menu lets you attach your CV as a PDF, and download the cover
+  letter, the CV, or both merged into a single application PDF
   (`src/components/application/ApplicationEditorMenu.vue`).
 
 ## Requirements
@@ -80,6 +82,11 @@ Put it in a `.env.local` (git-ignored via `*.local`) at the repo root:
 ```sh
 VITE_JOB_MATCH_SERVER_URL=http://localhost:3000
 ```
+
+Note that `localhost` is resolved by whichever device loads the page. If you
+open the app from your phone (see below), point the variable at the dev
+machine's LAN address instead — or leave it unset and let the hostname-relative
+default do the right thing.
 
 ### Order of operations
 
@@ -130,6 +137,13 @@ once before the first run:
 npx playwright install
 ```
 
+On CI, build first — the CI run is served by `npm run preview`, which only
+serves whatever is already in `dist/`:
+
+```sh
+npm run build
+```
+
 ```sh
 npm run test:e2e
 
@@ -141,7 +155,8 @@ npm run test:e2e -- --debug
 ```
 
 Playwright starts the server for you (`npm run dev` locally, `npm run preview`
-on CI) and reuses one that is already running. The base URL is
+on CI). Locally it reuses a server that is already running; on CI it always
+starts its own (`reuseExistingServer: !process.env.CI`). The base URL is
 `http://localhost:5173` locally and `http://localhost:4173` on CI. The e2e
 specs drive the real app, so they expect a jobMatchServer at
 `http://localhost:3000`.
@@ -150,26 +165,30 @@ specs drive the real app, so they expect a jobMatchServer at
 
 ```
 src/
+├── main.ts         App entry point — creates the Vue app and mounts it
+├── App.vue         Root component
 ├── pages/          Route-level views (match deck, search, application editor)
 ├── components/     Job cards, brand bar, match filter, cover letter and CV UI
 ├── lib/            API client (base URL resolution, JSON/SSE/blob helpers)
 ├── constants/      CSS custom properties for colors, layout and typography
 ├── router/         vue-router setup
-├── mockups/        Sample scrape payload used while developing
+├── mockups/        Reference `/scrape/linkedin` payload (not imported anywhere)
 └── __tests__/      Vitest unit tests
 ```
 
 ### Path aliases
 
-Resolved by Vite (`vite.config.ts`); `@/*` and `@pages` are additionally
-mapped in `tsconfig.app.json` for the type checker:
+All four are resolved by Vite (`vite.config.ts`), but only `@/*` and `@pages`
+are mapped in `tsconfig.app.json`. Importing through `@components` or
+`@assets` therefore builds fine and then fails `npm run type-check`, so prefer
+`@/components` and `@/assets`:
 
-| Alias         | Resolves to          |
-| ------------- | -------------------- |
-| `@/*`         | `src/*`              |
-| `@pages`      | `src/pages/index.ts` |
-| `@components` | `src/components`     |
-| `@assets`     | `src/assets`         |
+| Alias         | Resolves to          | Type-checked | Note                           |
+| ------------- | -------------------- | ------------ | ------------------------------ |
+| `@/*`         | `src/*`              | yes          |                                |
+| `@pages`      | `src/pages/index.ts` | yes          |                                |
+| `@components` | `src/components`     | no           | prefer `@/components`          |
+| `@assets`     | `src/assets`         | no           | directory does not exist (yet) |
 
 ## Further reading
 
