@@ -41,6 +41,7 @@
     min-height: 0;
     width: var(--job-card-width);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
 }

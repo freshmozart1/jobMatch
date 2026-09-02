@@ -91,4 +91,47 @@ describe('JobCardStack', () => {
         expect(wrapper.find('.job-card-stack__empty').exists()).toBe(true);
         expect(wrapper.find('.job-card-stack__loading').exists()).toBe(false);
     });
+
+    it('renders a cancel button beside the loading label while loading', () => {
+        const wrapper = mount(JobCardStack, {
+            props: { jobs: [], isLoading: true },
+        });
+
+        expect(wrapper.find('.job-card-stack__loading').text()).toBe(
+            'Loading more jobs...',
+        );
+        expect(wrapper.find('.scrape-cancel').exists()).toBe(true);
+        expect(wrapper.find('.scrape-cancel').text()).toBe('Cancel');
+    });
+
+    it('renders the cancel button after the last job is swiped away while still loading', async () => {
+        const wrapper = mount(JobCardStack, {
+            props: { jobs, isLoading: true },
+        });
+
+        swipeTopCard(wrapper);
+        await wrapper.vm.$nextTick();
+        swipeTopCard(wrapper);
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.find('.scrape-cancel').exists()).toBe(true);
+    });
+
+    it('emits cancel when the cancel button is clicked', async () => {
+        const wrapper = mount(JobCardStack, {
+            props: { jobs: [], isLoading: true },
+        });
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+
+        expect(wrapper.emitted('cancel')).toHaveLength(1);
+    });
+
+    it('renders no cancel button in the plain empty state', () => {
+        const wrapper = mount(JobCardStack, {
+            props: { jobs: [], isLoading: false },
+        });
+
+        expect(wrapper.find('.scrape-cancel').exists()).toBe(false);
+    });
 });

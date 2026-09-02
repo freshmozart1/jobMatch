@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { BrandBar, JobCardStack, MatchFilterBar } from '@/components';
+import {
+    BrandBar,
+    CancelScrapeButton,
+    JobCardStack,
+    MatchFilterBar,
+} from '@/components';
 import ApplicationEditorPage from './ApplicationEditorPage.vue';
 import MatchEmpty from './MatchEmpty.vue';
 import SearchPage from './SearchPage.vue';
@@ -20,6 +25,7 @@ function isScrapeErrorEvent(
 const jobs = ref<ScrapedJob[]>([]);
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
+const scrapeCancelled = ref(false);
 const matchFilterOn = ref(false);
 const matchThreshold = ref(50);
 const keywords = ref<string[]>(loadKeywords());
@@ -36,11 +42,11 @@ const visibleJobs = computed(() =>
           )
         : jobs.value,
 );
-const emptyLabel = computed(() =>
-    matchFilterOn.value
-        ? `No jobs at or above ${matchThreshold.value}% match`
-        : 'No more jobs',
-);
+const emptyLabel = computed(() => {
+    if (matchFilterOn.value)
+        return `No jobs at or above ${matchThreshold.value}% match`;
+    return scrapeCancelled.value ? 'Search stopped' : 'No more jobs';
+});
 
 function loadKeywords(): string[] {
     try {
@@ -156,6 +162,7 @@ async function fetchJobs(): Promise<void> {
     isLoading.value = true;
     jobs.value = [];
     errorMessage.value = null;
+    scrapeCancelled.value = false;
     const seenDuplicateKeys = new Set<string>();
 
     try {
@@ -179,7 +186,9 @@ async function fetchJobs(): Promise<void> {
             jobs.value.push(event);
         }
     } catch (error) {
-        if (scrapeGeneration === myGeneration) {
+        // An abort is either a user-requested stop or a superseded scrape —
+        // neither is a failure, so neither may surface as an error message.
+        if (scrapeGeneration === myGeneration && !signal.aborted) {
             errorMessage.value =
                 error instanceof Error
                     ? error.message
@@ -190,6 +199,11 @@ async function fetchJobs(): Promise<void> {
             isLoading.value = false;
         }
     }
+}
+
+function cancelScrape(): void {
+    scrapeCancelled.value = true;
+    scrapeAbortController?.abort();
 }
 
 onUnmounted(() => {
@@ -237,10 +251,12 @@ watch(searchOpen, (open) => {
                     :is-loading="isLoading"
                     @like="createJob"
                     @edit="openApplicationEditor"
+                    @cancel="cancelScrape"
                 />
             </template>
             <div v-else class="match-status-fill">
                 <p class="match-page__status">Loading jobs...</p>
+                <CancelScrapeButton @click="cancelScrape" />
             </div>
         </template>
 

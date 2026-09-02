@@ -86,19 +86,27 @@ function createControllableSseResponse() {
         close() {
             controllerRef.close();
         },
+        // Mirrors what a real fetch does when its signal is aborted: the
+        // response body stream errors and the pending read rejects.
+        abort() {
+            controllerRef.error(
+                new DOMException('The user aborted a request.', 'AbortError'),
+            );
+        },
     };
 }
 
 function mountWithControllableStream() {
     const stream = createControllableSseResponse();
-    vi.stubGlobal(
-        'fetch',
-        vi.fn((input: string) => {
-            if (input.endsWith('/scrape/linkedin')) return stream.response;
-            return createJsonResponse({});
-        }),
-    );
-    return { wrapper: mount(MatchPage), stream };
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+        if (input.endsWith('/scrape/linkedin')) {
+            init?.signal?.addEventListener('abort', () => stream.abort());
+            return stream.response;
+        }
+        return createJsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return { wrapper: mount(MatchPage), stream, fetchMock };
 }
 
 async function mountWithFirstJobStreamed() {
@@ -641,5 +649,95 @@ describe('MatchPage', () => {
         expect(wrapper.find('.job-card-stack__empty').text()).toBe(
             'No jobs at or above 95% match',
         );
+    });
+
+    it('renders a cancel control alongside the initial loading text', async () => {
+        const { wrapper, stream } = mountWithControllableStream();
+
+        await wrapper.vm.$nextTick();
+
+        expect(
+            wrapper.find('.match-status-fill .match-page__status').text(),
+        ).toBe('Loading jobs...');
+        expect(wrapper.find('.match-status-fill .scrape-cancel').text()).toBe(
+            'Cancel',
+        );
+
+        stream.close();
+    });
+
+    it('aborts the in-flight scrape when the cancel control is clicked', async () => {
+        const { wrapper, fetchMock } = mountWithControllableStream();
+
+        await wrapper.vm.$nextTick();
+
+        const playwrightCall = fetchMock.mock.calls.find((args) =>
+            args[0].endsWith('/scrape/linkedin'),
+        );
+        expect(playwrightCall).toBeDefined();
+        const init = (playwrightCall as unknown as [unknown, RequestInit])[1];
+        const signal = init.signal as AbortSignal;
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+
+        expect(signal.aborted).toBe(true);
+    });
+
+    it('does not surface a cancelled scrape as an error', async () => {
+        const { wrapper } = mountWithControllableStream();
+
+        await wrapper.vm.$nextTick();
+        await wrapper.find('.scrape-cancel').trigger('click');
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack').exists()).toBe(true);
+        });
+        expect(wrapper.find('.match-page__status--error').exists()).toBe(false);
+        expect(wrapper.find('.match-page__status--warning').exists()).toBe(
+            false,
+        );
+    });
+
+    it('settles into the stopped state when the scrape is cancelled', async () => {
+        const { wrapper } = mountWithControllableStream();
+
+        await wrapper.vm.$nextTick();
+        await wrapper.find('.scrape-cancel').trigger('click');
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+                'Search stopped',
+            );
+        });
+    });
+
+    it('keeps the already-streamed jobs when the scrape is cancelled', async () => {
+        const { wrapper, stream } = await mountWithFirstJobStreamed();
+
+        stream.push(testJobs[1]);
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
+        });
+
+        // Swipe past the whole partial deck — the stack now shows the
+        // "loading more" label with the cancel control beside it.
+        await swipeAllCards(wrapper, testJobs.length);
+        expect(wrapper.find('.job-card-stack__loading').text()).toBe(
+            'Loading more jobs...',
+        );
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+                'Search stopped',
+            );
+        });
+
+        // Toggling the match filter re-keys the stack, remounting it at index
+        // 0. The 90% job can only reappear if the partial deck survived.
+        await wrapper.find('.match-filter__switch').trigger('click');
+        await wrapper.vm.$nextTick();
+
+        expectTopCardStillFirst(wrapper);
     });
 });
