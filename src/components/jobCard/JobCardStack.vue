@@ -73,7 +73,7 @@ function onSwipe(direction: 'left' | 'right') {
         <template v-else>
             <template v-if="isLoading">
                 <p class="job-card-stack__loading">{{ loadingLabel }}</p>
-                <CancelScrapeButton @click="emit('cancel')" />
+                <CancelScrapeButton @cancel="emit('cancel')" />
             </template>
             <p v-else class="job-card-stack__empty">{{ emptyLabel }}</p>
         </template>

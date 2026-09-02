@@ -740,4 +740,111 @@ describe('MatchPage', () => {
 
         expectTopCardStillFirst(wrapper);
     });
+
+    it('surfaces a genuine scrape failure as an error message', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((input: string) => {
+                if (input.endsWith('/scrape/linkedin'))
+                    return Promise.reject(new Error('Network unreachable'));
+                return createJsonResponse({});
+            }),
+        );
+
+        const wrapper = mount(MatchPage);
+
+        // The cancel control suppresses aborts, not real failures.
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-page__status--error').text()).toBe(
+                'Network unreachable',
+            );
+        });
+    });
+
+    it('re-runs the same search after a cancel when the search sheet is closed', async () => {
+        const stream = createControllableSseResponse();
+        let playwrightCallCount = 0;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((input: string, init?: RequestInit) => {
+                if (input.endsWith('/scrape/linkedin')) {
+                    playwrightCallCount++;
+                    if (playwrightCallCount === 1) {
+                        init?.signal?.addEventListener('abort', () =>
+                            stream.abort(),
+                        );
+                        return stream.response;
+                    }
+                    return createSseResponse(testJobs);
+                }
+                return createJsonResponse({});
+            }),
+        );
+
+        const wrapper = mount(MatchPage);
+        await wrapper.vm.$nextTick();
+        await wrapper.find('.scrape-cancel').trigger('click');
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+                'Search stopped',
+            );
+        });
+
+        // Reopen and close the search sheet without touching a single
+        // parameter — the cancelled search has to be re-runnable as-is.
+        wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search');
+        await wrapper.vm.$nextTick();
+        wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back');
+
+        await vi.waitFor(() => {
+            expect(playwrightCallCount).toBe(2);
+        });
+        await vi.waitFor(() => {
+            expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
+        });
+    });
+
+    it('keeps the scrape cancellable when an error frame arrives before any job', async () => {
+        const { wrapper, stream } = mountWithControllableStream();
+
+        stream.push({ error: 'Scrape failed', reason: 'boom' });
+
+        await vi.waitFor(() => {
+            expect(
+                wrapper
+                    .find('.match-status-fill .match-page__status--warning')
+                    .text(),
+            ).toBe('Scrape failed');
+        });
+        expect(wrapper.find('.match-status-fill .scrape-cancel').exists()).toBe(
+            true,
+        );
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-status-fill').exists()).toBe(false);
+        });
+    });
+
+    it('reports a cancelled empty search as stopped even with the match filter on', async () => {
+        const { wrapper } = mountWithControllableStream();
+
+        await wrapper.vm.$nextTick();
+        await wrapper.find('.scrape-cancel').trigger('click');
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+                'Search stopped',
+            );
+        });
+
+        await wrapper.find('.match-filter__switch').trigger('click');
+        await wrapper.vm.$nextTick();
+
+        // Nothing was scraped, so the threshold never got a chance to reject
+        // anything — blaming the filter would misreport why the deck is empty.
+        expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+            'Search stopped',
+        );
+    });
 });

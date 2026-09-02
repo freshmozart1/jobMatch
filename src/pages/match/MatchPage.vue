@@ -43,6 +43,10 @@ const visibleJobs = computed(() =>
         : jobs.value,
 );
 const emptyLabel = computed(() => {
+    // With nothing scraped at all, the threshold wording would blame the filter
+    // for an empty deck the cancelled scrape is responsible for.
+    if (scrapeCancelled.value && jobs.value.length === 0)
+        return 'Search stopped';
     if (matchFilterOn.value)
         return `No jobs at or above ${matchThreshold.value}% match`;
     return scrapeCancelled.value ? 'Search stopped' : 'No more jobs';
@@ -203,6 +207,15 @@ async function fetchJobs(): Promise<void> {
 
 function cancelScrape(): void {
     scrapeCancelled.value = true;
+    // Settle into the stopped state immediately rather than waiting for the
+    // aborted stream to reject — a stream that has already been fully buffered
+    // drains to `done` instead of erroring, and never rejects at all.
+    isLoading.value = false;
+    // Forget the cancelled scrape's parameters so that reopening and closing
+    // the search sheet re-runs the *same* search. Without this the user has no
+    // way back to the search they stopped, which is the dead end the cancel
+    // control exists to prevent.
+    lastFetchedParams = null;
     scrapeAbortController?.abort();
 }
 
@@ -226,13 +239,30 @@ watch(searchOpen, (open) => {
 
         <MatchEmpty v-if="!matchEnabled" @open-search="searchOpen = true" />
         <template v-else>
+            <!-- Initial load: this branch wins over the error state below so an
+                 in-flight scrape stays cancellable even after an error frame —
+                 otherwise a mid-scrape error re-traps the user on a screen with
+                 no way to stop the scrape. -->
+            <div
+                v-if="isLoading && jobs.length === 0"
+                class="match-status-fill"
+            >
+                <p
+                    v-if="errorMessage"
+                    class="match-page__status match-page__status--warning"
+                >
+                    {{ errorMessage }}
+                </p>
+                <p class="match-page__status">Loading jobs...</p>
+                <CancelScrapeButton @cancel="cancelScrape" />
+            </div>
             <p
-                v-if="errorMessage && jobs.length === 0"
+                v-else-if="errorMessage && jobs.length === 0"
                 class="match-page__status match-page__status--error"
             >
                 {{ errorMessage }}
             </p>
-            <template v-else-if="jobs.length > 0 || !isLoading">
+            <template v-else>
                 <p
                     v-if="errorMessage"
                     class="match-page__status match-page__status--warning"
@@ -254,10 +284,6 @@ watch(searchOpen, (open) => {
                     @cancel="cancelScrape"
                 />
             </template>
-            <div v-else class="match-status-fill">
-                <p class="match-page__status">Loading jobs...</p>
-                <CancelScrapeButton @click="cancelScrape" />
-            </div>
         </template>
 
         <div :class="['overlay', { 'overlay--open': applicationEditorOpen }]">

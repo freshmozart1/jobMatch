@@ -1,5 +1,13 @@
+<script setup lang="ts">
+const emit = defineEmits<{
+    (e: 'cancel'): void;
+}>();
+</script>
+
 <template>
-    <button type="button" class="scrape-cancel">Cancel</button>
+    <button type="button" class="scrape-cancel" @click="emit('cancel')">
+        Cancel
+    </button>
 </template>
 
 <style scoped>
