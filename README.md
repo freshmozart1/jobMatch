@@ -14,9 +14,9 @@ to be running for jobMatch to do anything. See
 
 ## Screenshots
 
-| Match page                                                                                                                                                                      | Cover letter editor                                                                                                                                                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Swipeable job card with a match meter, tags and the job description, above the dislike and like drag indicators and the cover letter button](docs/screenshots/match-page.png) | ![Cover letter editor showing the job the letter is written for, a full draft in the text area, the save status, the AI generate button and a word count](docs/screenshots/application-editor.png) |
+| Match page                                                                                                                                                                                                  | Application Editor                                                                                                                                                                                                                                            | Cover Letter                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Swipeable job card with a match meter, tags and the job description, above the dislike and like drag indicators and the pencil button that opens the Application Editor](docs/screenshots/match-page.png) | ![Application Editor menu with a Cover Letter row reading "Draft written", a Curriculum Vitae row reading "PDF attached", a download button beside each, and an enabled "Download application" button at the bottom](docs/screenshots/application-editor.png) | ![Cover letter editor showing the job the letter is written for, a full draft in the text area, the save status, the AI generate button and a word count](docs/screenshots/cover-letter-editor.png) |
 
 ## Features
 
@@ -34,15 +34,40 @@ to be running for jobMatch to do anything. See
   without a `match` value simply renders without one. A filter bar lets you
   hide everything below an adjustable threshold
   (`src/components/MatchFilterBar.vue`).
-- **Application editor** — the pencil button below the deck opens an editor for
-  the card on top (`src/pages/match/ApplicationEditorPage.vue`) with the job it
-  belongs to kept in view. Generate a cover letter tailored to that job with one
-  tap, then edit it by hand — drafts auto-save to `localStorage` and upload to
-  the server (both live in `ApplicationEditorPage.vue`; the editor itself,
-  `src/components/coverLetter/CoverLetterEditor.vue`, is presentational). The
-  same editor's menu lets you attach your CV as a PDF, and download the cover
-  letter, the CV, or both merged into a single application PDF
-  (`src/components/application/ApplicationEditorMenu.vue`).
+- **Application editor** — the pencil button below the deck opens the
+  Application Editor for the card on top
+  (`src/pages/match/ApplicationEditorPage.vue`). It is a two-view flow: you land
+  on a menu (`src/components/application/ApplicationEditorMenu.vue`) offering a
+  cover letter action, a CV attachment and the application download; the cover
+  letter editor is a second view opened from the menu's cover letter row.
+- **Cover letter** — generate one tailored to the job with one tap
+  (`POST /cover-letters/create/text`), then edit it by hand with the job it
+  belongs to kept in view (the menu shows no job; the letter view does). Drafts
+  save to `localStorage` immediately and upload to the server after a 3s typing
+  pause (`POST /cover-letters/upload/text`) — and also when you leave the
+  editor, swipe to another card, or the page unmounts. Both live in
+  `ApplicationEditorPage.vue`;
+  `src/components/coverLetter/CoverLetterEditor.vue` is presentational.
+- **CV and downloads** — attach a PDF CV (`src/components/CvFileInput.vue`,
+  `accept="application/pdf,.pdf"`). That component only emits the chosen file;
+  `ApplicationEditorPage.vue` uploads it (`POST /cv/upload`) and checks presence
+  (`GET /cv/<duplicateKey>/status`). Both are scoped to the job's
+  `duplicateKey`, so a CV is attached per job and has to be re-attached for the
+  next one. Download the cover letter alone (`GET /cover-letters/<duplicateKey>`),
+  the CV alone (`GET /cv/<duplicateKey>`), or both:
+    - the CV download button is disabled until the CV is on the server
+      (`:disabled="!uploaded"` in `CvFileInput.vue`);
+    - the cover letter download button is disabled until a draft exists **in
+      this browser** (`:disabled="!done"` in
+      `src/components/coverLetter/CoverLetterAction.vue`, fed by
+      `letterDone = text.trim().length > 0`) — that is the local draft, not the
+      uploaded document, so it enables before the debounced upload lands;
+    - "Download application" is disabled until at least one of the two exists
+      (`:disabled="!letterDone && !cvUploaded"`), on the same local-draft
+      reading of the cover letter;
+    - with **both** present it fetches the merged PDF
+      (`GET /application/<key>`); with only one, it downloads that single
+      document instead of a merged PDF.
 
 ## Requirements
 
@@ -168,7 +193,8 @@ src/
 ├── main.ts         App entry point — creates the Vue app and mounts it
 ├── App.vue         Root component
 ├── pages/          Route-level views (match deck, search, application editor)
-├── components/     Job cards, brand bar, match filter, cover letter and CV UI
+├── components/     Job cards, brand bar, match filter, application editor,
+│                   cover letter and CV UI
 ├── lib/            API client (base URL resolution, JSON/SSE/blob helpers)
 ├── constants/      CSS custom properties for colors, layout and typography
 ├── router/         vue-router setup
