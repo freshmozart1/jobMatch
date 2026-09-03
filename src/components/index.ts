@@ -4,3 +4,4 @@ export { default as JobCardContainer } from './jobCard/JobCardContainer.vue';
 export { default as JobCardStack } from './jobCard/JobCardStack.vue';
 export { default as MatchFilterBar } from './MatchFilterBar.vue';
 export { default as BrandBar } from './BrandBar.vue';
+export { default as CancelScrapeButton } from './CancelScrapeButton.vue';

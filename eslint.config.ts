@@ -37,7 +37,11 @@ export default defineConfigWithVueTs(
             'vitest/expect-expect': [
                 'error',
                 {
-                    assertFunctionNames: ['expect', 'expectEndpointsCalled'],
+                    assertFunctionNames: [
+                        'expect',
+                        'expectEndpointsCalled',
+                        'expectSearchStopped',
+                    ],
                 },
             ],
         },

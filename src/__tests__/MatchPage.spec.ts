@@ -86,19 +86,27 @@ function createControllableSseResponse() {
         close() {
             controllerRef.close();
         },
+        // Mirrors what a real fetch does when its signal is aborted: the
+        // response body stream errors and the pending read rejects.
+        abort() {
+            controllerRef.error(
+                new DOMException('The user aborted a request.', 'AbortError'),
+            );
+        },
     };
 }
 
 function mountWithControllableStream() {
     const stream = createControllableSseResponse();
-    vi.stubGlobal(
-        'fetch',
-        vi.fn((input: string) => {
-            if (input.endsWith('/scrape/linkedin')) return stream.response;
-            return createJsonResponse({});
-        }),
-    );
-    return { wrapper: mount(MatchPage), stream };
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+        if (input.endsWith('/scrape/linkedin')) {
+            init?.signal?.addEventListener('abort', () => stream.abort());
+            return stream.response;
+        }
+        return createJsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return { wrapper: mount(MatchPage), stream, fetchMock };
 }
 
 async function mountWithFirstJobStreamed() {
@@ -174,6 +182,21 @@ function dragCurrentCard(wrapper: ReturnType<typeof mount>, clientX: number) {
     card.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0 }));
     card.dispatchEvent(new MouseEvent('pointermove', { clientX }));
     return card;
+}
+
+async function mountAndCancelScrape() {
+    const { wrapper, stream, fetchMock } = mountWithControllableStream();
+    await wrapper.vm.$nextTick();
+    await wrapper.find('.scrape-cancel').trigger('click');
+    return { wrapper, stream, fetchMock };
+}
+
+async function expectSearchStopped(wrapper: ReturnType<typeof mount>) {
+    await vi.waitFor(() => {
+        expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+            'Search stopped',
+        );
+    });
 }
 
 function expectTopCardStillFirst(wrapper: ReturnType<typeof mount>) {
@@ -640,6 +663,179 @@ describe('MatchPage', () => {
         expect(wrapper.find('.job-card-stack__current').exists()).toBe(false);
         expect(wrapper.find('.job-card-stack__empty').text()).toBe(
             'No jobs at or above 95% match',
+        );
+    });
+
+    it('renders a cancel control alongside the initial loading text', async () => {
+        const { wrapper, stream } = mountWithControllableStream();
+
+        await wrapper.vm.$nextTick();
+
+        expect(
+            wrapper.find('.match-status-fill .match-page__status').text(),
+        ).toBe('Loading jobs...');
+        expect(wrapper.find('.match-status-fill .scrape-cancel').text()).toBe(
+            'Cancel',
+        );
+
+        stream.close();
+    });
+
+    it('aborts the in-flight scrape when the cancel control is clicked', async () => {
+        const { wrapper, fetchMock } = mountWithControllableStream();
+
+        await wrapper.vm.$nextTick();
+
+        const playwrightCall = fetchMock.mock.calls.find((args) =>
+            args[0].endsWith('/scrape/linkedin'),
+        );
+        expect(playwrightCall).toBeDefined();
+        const init = (playwrightCall as unknown as [unknown, RequestInit])[1];
+        const signal = init.signal as AbortSignal;
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+
+        expect(signal.aborted).toBe(true);
+    });
+
+    it('does not surface a cancelled scrape as an error', async () => {
+        const { wrapper } = await mountAndCancelScrape();
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack').exists()).toBe(true);
+        });
+        expect(wrapper.find('.match-page__status--error').exists()).toBe(false);
+        expect(wrapper.find('.match-page__status--warning').exists()).toBe(
+            false,
+        );
+    });
+
+    it('settles into the stopped state when the scrape is cancelled', async () => {
+        const { wrapper } = await mountAndCancelScrape();
+
+        await expectSearchStopped(wrapper);
+    });
+
+    it('keeps the already-streamed jobs when the scrape is cancelled', async () => {
+        const { wrapper, stream } = await mountWithFirstJobStreamed();
+
+        stream.push(testJobs[1]);
+        await vi.waitFor(() => {
+            expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
+        });
+
+        // Swipe past the whole partial deck — the stack now shows the
+        // "loading more" label with the cancel control beside it.
+        await swipeAllCards(wrapper, testJobs.length);
+        expect(wrapper.find('.job-card-stack__loading').text()).toBe(
+            'Loading more jobs...',
+        );
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+        await expectSearchStopped(wrapper);
+
+        // Toggling the match filter re-keys the stack, remounting it at index
+        // 0. The 90% job can only reappear if the partial deck survived.
+        await wrapper.find('.match-filter__switch').trigger('click');
+        await wrapper.vm.$nextTick();
+
+        expectTopCardStillFirst(wrapper);
+    });
+
+    it('surfaces a genuine scrape failure as an error message', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((input: string) => {
+                if (input.endsWith('/scrape/linkedin'))
+                    return Promise.reject(new Error('Network unreachable'));
+                return createJsonResponse({});
+            }),
+        );
+
+        const wrapper = mount(MatchPage);
+
+        // The cancel control suppresses aborts, not real failures.
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-page__status--error').text()).toBe(
+                'Network unreachable',
+            );
+        });
+    });
+
+    it('re-runs the same search after a cancel when the search sheet is closed', async () => {
+        const stream = createControllableSseResponse();
+        let playwrightCallCount = 0;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((input: string, init?: RequestInit) => {
+                if (input.endsWith('/scrape/linkedin')) {
+                    playwrightCallCount++;
+                    if (playwrightCallCount === 1) {
+                        init?.signal?.addEventListener('abort', () =>
+                            stream.abort(),
+                        );
+                        return stream.response;
+                    }
+                    return createSseResponse(testJobs);
+                }
+                return createJsonResponse({});
+            }),
+        );
+
+        const wrapper = mount(MatchPage);
+        await wrapper.vm.$nextTick();
+        await wrapper.find('.scrape-cancel').trigger('click');
+        await expectSearchStopped(wrapper);
+
+        // Reopen and close the search sheet without touching a single
+        // parameter — the cancelled search has to be re-runnable as-is.
+        wrapper.findComponent({ name: 'MatchFilterBar' }).vm.$emit('search');
+        await wrapper.vm.$nextTick();
+        wrapper.findComponent({ name: 'SearchPage' }).vm.$emit('back');
+
+        await vi.waitFor(() => {
+            expect(playwrightCallCount).toBe(2);
+        });
+        await vi.waitFor(() => {
+            expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
+        });
+    });
+
+    it('keeps the scrape cancellable when an error frame arrives before any job', async () => {
+        const { wrapper, stream } = mountWithControllableStream();
+
+        stream.push({ error: 'Scrape failed', reason: 'boom' });
+
+        await vi.waitFor(() => {
+            expect(
+                wrapper
+                    .find('.match-status-fill .match-page__status--warning')
+                    .text(),
+            ).toBe('Scrape failed');
+        });
+        expect(wrapper.find('.match-status-fill .scrape-cancel').exists()).toBe(
+            true,
+        );
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-status-fill').exists()).toBe(false);
+        });
+    });
+
+    it('reports a cancelled empty search as stopped even with the match filter on', async () => {
+        const { wrapper } = await mountAndCancelScrape();
+
+        await expectSearchStopped(wrapper);
+
+        await wrapper.find('.match-filter__switch').trigger('click');
+        await wrapper.vm.$nextTick();
+
+        // Nothing was scraped, so the threshold never got a chance to reject
+        // anything — blaming the filter would misreport why the deck is empty.
+        expect(wrapper.find('.job-card-stack__empty').text()).toBe(
+            'Search stopped',
         );
     });
 });

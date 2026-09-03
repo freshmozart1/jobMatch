@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { BrandBar, JobCardStack, MatchFilterBar } from '@/components';
+import {
+    BrandBar,
+    CancelScrapeButton,
+    JobCardStack,
+    MatchFilterBar,
+} from '@/components';
 import ApplicationEditorPage from './ApplicationEditorPage.vue';
 import MatchEmpty from './MatchEmpty.vue';
 import SearchPage from './SearchPage.vue';
@@ -20,6 +25,7 @@ function isScrapeErrorEvent(
 const jobs = ref<ScrapedJob[]>([]);
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
+const scrapeCancelled = ref(false);
 const matchFilterOn = ref(false);
 const matchThreshold = ref(50);
 const keywords = ref<string[]>(loadKeywords());
@@ -36,11 +42,15 @@ const visibleJobs = computed(() =>
           )
         : jobs.value,
 );
-const emptyLabel = computed(() =>
-    matchFilterOn.value
-        ? `No jobs at or above ${matchThreshold.value}% match`
-        : 'No more jobs',
-);
+const emptyLabel = computed(() => {
+    // With nothing scraped at all, the threshold wording would blame the filter
+    // for an empty deck the cancelled scrape is responsible for.
+    if (scrapeCancelled.value && jobs.value.length === 0)
+        return 'Search stopped';
+    if (matchFilterOn.value)
+        return `No jobs at or above ${matchThreshold.value}% match`;
+    return scrapeCancelled.value ? 'Search stopped' : 'No more jobs';
+});
 
 function loadKeywords(): string[] {
     try {
@@ -141,6 +151,22 @@ function searchParamsChanged(): boolean {
     );
 }
 
+// One frame of the scrape stream: an error frame updates the banner without
+// ending the scrape, and a job frame is kept only the first time its
+// duplicateKey is seen.
+function applyScrapeEvent(
+    event: ScrapeStreamEvent,
+    seenDuplicateKeys: Set<string>,
+): void {
+    if (isScrapeErrorEvent(event)) {
+        errorMessage.value = event.error;
+        return;
+    }
+    if (seenDuplicateKeys.has(event.duplicateKey)) return;
+    seenDuplicateKeys.add(event.duplicateKey);
+    jobs.value.push(event);
+}
+
 async function fetchJobs(): Promise<void> {
     lastFetchedParams = {
         keywords: [...keywords.value],
@@ -156,6 +182,7 @@ async function fetchJobs(): Promise<void> {
     isLoading.value = true;
     jobs.value = [];
     errorMessage.value = null;
+    scrapeCancelled.value = false;
     const seenDuplicateKeys = new Set<string>();
 
     try {
@@ -170,16 +197,12 @@ async function fetchJobs(): Promise<void> {
             signal,
         )) {
             if (scrapeGeneration !== myGeneration) return;
-            if (isScrapeErrorEvent(event)) {
-                errorMessage.value = event.error;
-                continue;
-            }
-            if (seenDuplicateKeys.has(event.duplicateKey)) continue;
-            seenDuplicateKeys.add(event.duplicateKey);
-            jobs.value.push(event);
+            applyScrapeEvent(event, seenDuplicateKeys);
         }
     } catch (error) {
-        if (scrapeGeneration === myGeneration) {
+        // An abort is either a user-requested stop or a superseded scrape —
+        // neither is a failure, so neither may surface as an error message.
+        if (scrapeGeneration === myGeneration && !signal.aborted) {
             errorMessage.value =
                 error instanceof Error
                     ? error.message
@@ -190,6 +213,20 @@ async function fetchJobs(): Promise<void> {
             isLoading.value = false;
         }
     }
+}
+
+function cancelScrape(): void {
+    scrapeCancelled.value = true;
+    // Settle into the stopped state immediately rather than waiting for the
+    // aborted stream to reject — a stream that has already been fully buffered
+    // drains to `done` instead of erroring, and never rejects at all.
+    isLoading.value = false;
+    // Forget the cancelled scrape's parameters so that reopening and closing
+    // the search sheet re-runs the *same* search. Without this the user has no
+    // way back to the search they stopped, which is the dead end the cancel
+    // control exists to prevent.
+    lastFetchedParams = null;
+    scrapeAbortController?.abort();
 }
 
 onUnmounted(() => {
@@ -212,13 +249,30 @@ watch(searchOpen, (open) => {
 
         <MatchEmpty v-if="!matchEnabled" @open-search="searchOpen = true" />
         <template v-else>
+            <!-- Initial load: this branch wins over the error state below so an
+                 in-flight scrape stays cancellable even after an error frame —
+                 otherwise a mid-scrape error re-traps the user on a screen with
+                 no way to stop the scrape. -->
+            <div
+                v-if="isLoading && jobs.length === 0"
+                class="match-status-fill"
+            >
+                <p
+                    v-if="errorMessage"
+                    class="match-page__status match-page__status--warning"
+                >
+                    {{ errorMessage }}
+                </p>
+                <p class="match-page__status">Loading jobs...</p>
+                <CancelScrapeButton @cancel="cancelScrape" />
+            </div>
             <p
-                v-if="errorMessage && jobs.length === 0"
+                v-else-if="errorMessage && jobs.length === 0"
                 class="match-page__status match-page__status--error"
             >
                 {{ errorMessage }}
             </p>
-            <template v-else-if="jobs.length > 0 || !isLoading">
+            <template v-else>
                 <p
                     v-if="errorMessage"
                     class="match-page__status match-page__status--warning"
@@ -237,11 +291,9 @@ watch(searchOpen, (open) => {
                     :is-loading="isLoading"
                     @like="createJob"
                     @edit="openApplicationEditor"
+                    @cancel="cancelScrape"
                 />
             </template>
-            <div v-else class="match-status-fill">
-                <p class="match-page__status">Loading jobs...</p>
-            </div>
         </template>
 
         <div :class="['overlay', { 'overlay--open': applicationEditorOpen }]">

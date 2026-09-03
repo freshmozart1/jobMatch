@@ -26,10 +26,6 @@
     color: var(--error);
 }
 
-.match-page__status--loading {
-    margin-bottom: var(--match-card-control-gap);
-}
-
 .match-page__status--warning {
     margin-bottom: var(--match-card-control-gap);
     color: var(--warning);
@@ -41,13 +37,15 @@
     min-height: 0;
     width: var(--job-card-width);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
 }
 
+/* Only the "Loading jobs..." line pulses — an error frame rendered above it as
+   a warning is a settled fact, not a sign of ongoing work. */
 @media (prefers-reduced-motion: no-preference) {
-    .match-page__status--loading,
-    .match-status-fill .match-page__status {
+    .match-status-fill .match-page__status:not(.match-page__status--warning) {
         animation: match-status-pulse 1.4s ease-in-out infinite;
     }
 }

@@ -2,6 +2,9 @@
 import { computed, ref } from 'vue';
 import JobCard from './JobCard.vue';
 import JobCardContainer from './JobCardContainer.vue';
+// Imported by relative path on purpose: the `@/components` barrel re-exports
+// this component, so routing through it would create an import cycle.
+import CancelScrapeButton from '../CancelScrapeButton.vue';
 import type { ScrapedJob } from './types';
 
 const props = withDefaults(
@@ -20,6 +23,7 @@ const props = withDefaults(
 const emit = defineEmits<{
     (e: 'like', job: ScrapedJob, like: boolean): void;
     (e: 'edit', job: ScrapedJob): void;
+    (e: 'cancel'): void;
 }>();
 
 const currentIndex = ref(0);
@@ -67,9 +71,10 @@ function onSwipe(direction: 'left' | 'right') {
             />
         </div>
         <template v-else>
-            <p v-if="isLoading" class="job-card-stack__loading">
-                {{ loadingLabel }}
-            </p>
+            <template v-if="isLoading">
+                <p class="job-card-stack__loading">{{ loadingLabel }}</p>
+                <CancelScrapeButton @cancel="emit('cancel')" />
+            </template>
             <p v-else class="job-card-stack__empty">{{ emptyLabel }}</p>
         </template>
     </div>
