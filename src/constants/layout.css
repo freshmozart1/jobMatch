@@ -12,6 +12,7 @@
             var(--like-container-vertical-padding)
     );
     --brandbar-height: 26px;
+    --match-filter-height: 46px;
     --job-card-width: min(
         354px,
         calc(
@@ -25,6 +26,7 @@
             100svh - var(--match-top-padding) - var(--match-bottom-padding) -
                 var(--match-bottom-safe-area) - var(--match-card-control-gap) -
                 var(--like-container-height) - var(--brandbar-height) -
+                var(--match-card-control-gap) - var(--match-filter-height) -
                 var(--match-card-control-gap)
         )
     );
