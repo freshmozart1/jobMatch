@@ -1,10 +1,10 @@
 # jobMatch
 
 jobMatch is a mobile-first job hunting app. It streams freshly scraped LinkedIn
-job ads into a swipe deck, ranks each one by cosine similarity between the ad
-and your search keywords, and turns a job you liked into a downloadable
-application — an AI-drafted cover letter you can edit, plus your CV, merged
-into a single PDF.
+job ads into a swipe deck, learns your preferences from the jobs you like and
+dislike, and uses that swipe history to rank new ads. It turns a job you liked
+into a downloadable application — an AI-drafted cover letter you can edit, plus
+your CV, merged into a single PDF.
 
 The app itself is a Vue 3 + TypeScript frontend. All the heavy lifting —
 scraping, embedding, matching, cover letter generation, PDF assembly — happens
@@ -39,10 +39,13 @@ to be running for jobMatch to do anything. See
   failure. The stopped search stays re-runnable as it is: opening the search
   sheet and closing it again starts the same search over, without having to
   change a parameter first.
-- **Match score** — cards the backend scored carry a cosine-similarity meter
-  comparing the ad to your keywords
-  (`src/components/jobCard/JobCardCosineSimilarity.vue`); a job that arrives
-  without a `match` value simply renders without one. A filter bar lets you
+- **Match score** — the backend embeds each job ad and cosine-compares it with
+  the average embedding of jobs you liked. If the ad is closer to the average
+  of jobs you disliked, that similarity lowers its score. Search keywords only
+  select the LinkedIn results; they do not affect the score. At least one liked
+  job is required before the backend can calculate a match, so until then jobs
+  arrive without a `match` value and their cards render without the meter
+  (`src/components/jobCard/JobCardCosineSimilarity.vue`). A filter bar lets you
   hide everything below an adjustable threshold
   (`src/components/MatchFilterBar.vue`).
 - **Application editor** — the pencil button below the deck opens the
