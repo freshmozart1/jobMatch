@@ -74,7 +74,9 @@ function onThresholdInput(event: Event) {
 .match-filter {
     /* match the rendered job-card width: the card re-applies --job-card-width
      inside its own layer, which subtracts another 32px from the percentage */
+    box-sizing: border-box;
     width: calc(var(--job-card-width) - 32px);
+    height: var(--match-filter-height);
     flex: 0 0 auto;
     display: flex;
     align-items: center;
