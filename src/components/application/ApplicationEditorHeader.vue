@@ -5,6 +5,13 @@ defineEmits<{ back: [] }>();
 
 <template>
     <header class="cl-header">
+        <h1
+            id="application-editor-dialog-title"
+            class="cl-header__title"
+            tabindex="-1"
+        >
+            {{ title }}
+        </h1>
         <button type="button" class="cl-header__back" @click="$emit('back')">
             <svg
                 width="11"
@@ -23,7 +30,6 @@ defineEmits<{ back: [] }>();
             </svg>
             Back
         </button>
-        <span class="cl-header__title">{{ title }}</span>
     </header>
 </template>
 
@@ -60,7 +66,9 @@ defineEmits<{ back: [] }>();
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
+    margin: 0;
     font-size: 15px;
+    line-height: inherit;
     font-weight: 700;
     color: var(--text-color);
 }

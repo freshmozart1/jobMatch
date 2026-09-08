@@ -4,17 +4,18 @@ import JobCard from './JobCard.vue';
 import LikeContainer from '../LikeContainer.vue';
 import type { ScrapedJob } from './types';
 
-defineProps({
-    job: {
-        type: Object as () => ScrapedJob,
-        required: true,
-    },
-});
+withDefaults(
+    defineProps<{
+        job: ScrapedJob;
+        applicationEditorOpen?: boolean;
+    }>(),
+    { applicationEditorOpen: false },
+);
 
 const emit = defineEmits<{
     drag: [payload: { progress: number; direction: 'left' | 'right' | 'none' }];
     swipe: [direction: 'left' | 'right'];
-    edit: [];
+    edit: [trigger: HTMLButtonElement];
 }>();
 
 const maxDragDistance = 160;
@@ -130,6 +131,7 @@ function onTransitionEnd() {
     <LikeContainer
         :like-opacity="likeOpacity"
         :dislike-opacity="dislikeOpacity"
-        @edit="emit('edit')"
+        :application-editor-open="applicationEditorOpen"
+        @edit="emit('edit', $event)"
     />
 </template>

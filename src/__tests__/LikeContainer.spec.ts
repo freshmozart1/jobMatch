@@ -27,6 +27,29 @@ describe('LikeContainer', () => {
         expect(labels).toEqual(['Dislike', 'Open application editor', 'Like']);
     });
 
+    it('identifies the edit control as a collapsed dialog launcher by default', () => {
+        const wrapper = mount(LikeContainer);
+        const editButton = wrapper.find('.like-container__button--edit');
+
+        expect(editButton.attributes('aria-haspopup')).toBe('dialog');
+        expect(editButton.attributes('aria-controls')).toBe(
+            'application-editor-dialog',
+        );
+        expect(editButton.attributes('aria-expanded')).toBe('false');
+    });
+
+    it('reports the Application Editor as expanded while it is open', () => {
+        const wrapper = mount(LikeContainer, {
+            props: { applicationEditorOpen: true },
+        });
+
+        expect(
+            wrapper
+                .find('.like-container__button--edit')
+                .attributes('aria-expanded'),
+        ).toBe('true');
+    });
+
     it('defaults both thumb controls to 0.33 opacity', () => {
         const wrapper = mount(LikeContainer);
 
@@ -64,9 +87,11 @@ describe('LikeContainer', () => {
 
     it('emits an edit event when the pencil button is clicked', async () => {
         const wrapper = mount(LikeContainer);
+        const editButton = wrapper.find('.like-container__button--edit');
 
-        await wrapper.find('.like-container__button--edit').trigger('click');
+        await editButton.trigger('click');
 
         expect(wrapper.emitted('edit')).toHaveLength(1);
+        expect(wrapper.emitted('edit')![0]).toEqual([editButton.element]);
     });
 });

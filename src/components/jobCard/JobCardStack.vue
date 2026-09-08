@@ -13,16 +13,18 @@ const props = withDefaults(
         emptyLabel?: string;
         loadingLabel?: string;
         isLoading?: boolean;
+        applicationEditorOpen?: boolean;
     }>(),
     {
         emptyLabel: 'No more jobs',
         loadingLabel: 'Loading more jobs...',
         isLoading: false,
+        applicationEditorOpen: false,
     },
 );
 const emit = defineEmits<{
     (e: 'like', job: ScrapedJob, like: boolean): void;
-    (e: 'edit', job: ScrapedJob): void;
+    (e: 'edit', job: ScrapedJob, trigger: HTMLButtonElement): void;
     (e: 'cancel'): void;
 }>();
 
@@ -65,9 +67,10 @@ function onSwipe(direction: 'left' | 'right') {
             <JobCardContainer
                 :key="currentJob.duplicateKey"
                 :job="currentJob"
+                :application-editor-open="applicationEditorOpen"
                 @drag="onDrag"
                 @swipe="onSwipe"
-                @edit="emit('edit', currentJob)"
+                @edit="emit('edit', currentJob, $event)"
             />
         </div>
         <template v-else>

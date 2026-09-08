@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
     BrandBar,
     CancelScrapeButton,
@@ -30,10 +30,20 @@ const matchFilterOn = ref(false);
 const matchThreshold = ref(50);
 const keywords = ref<string[]>(loadKeywords());
 const searchOpen = ref(false);
+const searchDialogActive = ref(false);
 const applicationEditorOpen = ref(false);
 const activeJob = ref<ScrapedJob | null>(null);
+const matchPageRef = ref<HTMLElement | null>(null);
+const applicationEditorDialogRef = ref<HTMLElement | null>(null);
+const searchDialogRef = ref<HTMLElement | null>(null);
+
+let applicationEditorTrigger: HTMLButtonElement | null = null;
+let searchTrigger: HTMLButtonElement | null = null;
 
 const matchEnabled = computed(() => keywords.value.length > 0);
+const dialogActive = computed(
+    () => activeJob.value !== null || searchDialogActive.value,
+);
 const visibleJobs = computed(() =>
     matchFilterOn.value
         ? jobs.value.filter(
@@ -104,12 +114,57 @@ function getDatePosted(): string {
     }
 }
 
-function openApplicationEditor(job: ScrapedJob): void {
+const FOCUSABLE_SELECTOR = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled]):not([type="hidden"])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[contenteditable="true"]',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function isRendered(element: HTMLElement): boolean {
+    let current: HTMLElement | null = element;
+    while (current) {
+        const style = window.getComputedStyle(current);
+        if (
+            current.hidden ||
+            current.getAttribute('aria-hidden') === 'true' ||
+            style.display === 'none' ||
+            style.visibility === 'hidden'
+        ) {
+            return false;
+        }
+        current = current.parentElement;
+    }
+    return true;
+}
+
+function getTabbableElements(dialog: HTMLElement): HTMLElement[] {
+    return Array.from(
+        dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+    ).filter(isRendered);
+}
+
+function focusDialogHeading(dialog: HTMLElement | null): void {
+    dialog?.querySelector<HTMLElement>('.cl-header__title')?.focus();
+}
+
+async function openApplicationEditor(
+    job: ScrapedJob,
+    trigger: HTMLButtonElement,
+): Promise<void> {
+    if (searchDialogActive.value) return;
+    applicationEditorTrigger = trigger;
     activeJob.value = job;
     applicationEditorOpen.value = true;
+    await nextTick();
+    focusDialogHeading(applicationEditorDialogRef.value);
 }
 
 function closeApplicationEditor(): void {
+    if (!applicationEditorOpen.value) return;
     applicationEditorOpen.value = false;
 }
 
@@ -117,6 +172,103 @@ function finishClosingApplicationEditor(event: TransitionEvent): void {
     if (event.propertyName !== 'visibility' || applicationEditorOpen.value)
         return;
     activeJob.value = null;
+    const trigger = applicationEditorTrigger;
+    applicationEditorTrigger = null;
+    void restoreFocus(trigger, '.like-container__button--edit');
+}
+
+async function openSearch(trigger: HTMLButtonElement): Promise<void> {
+    if (activeJob.value !== null) return;
+    searchTrigger = trigger;
+    searchDialogActive.value = true;
+    searchOpen.value = true;
+    await nextTick();
+    focusDialogHeading(searchDialogRef.value);
+}
+
+function closeSearch(): void {
+    if (!searchOpen.value) return;
+    searchOpen.value = false;
+}
+
+function finishClosingSearch(event: TransitionEvent): void {
+    if (event.propertyName !== 'visibility' || searchOpen.value) return;
+    searchDialogActive.value = false;
+    const trigger = searchTrigger;
+    searchTrigger = null;
+    void restoreFocus(
+        trigger,
+        '.match-filter__search, .match-empty__cta, .scrape-cancel',
+    );
+}
+
+async function restoreFocus(
+    trigger: HTMLButtonElement | null,
+    fallbackSelector: string,
+): Promise<void> {
+    await nextTick();
+    if (trigger?.isConnected) {
+        trigger.focus();
+        return;
+    }
+    const fallback =
+        matchPageRef.value?.querySelector<HTMLElement>(fallbackSelector) ??
+        matchPageRef.value;
+    fallback?.focus();
+}
+
+function getActiveDialog(): HTMLElement | null {
+    if (activeJob.value !== null) return applicationEditorDialogRef.value;
+    if (searchDialogActive.value) return searchDialogRef.value;
+    return null;
+}
+
+function handleDialogFocusin(event: FocusEvent): void {
+    const dialog = getActiveDialog();
+    if (
+        !dialog?.isConnected ||
+        !(event.target instanceof Node) ||
+        dialog.contains(event.target)
+    ) {
+        return;
+    }
+    focusDialogHeading(dialog);
+}
+
+function handleDialogKeydown(event: KeyboardEvent): void {
+    const dialog = getActiveDialog();
+    if (!dialog?.isConnected) return;
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (applicationEditorOpen.value) closeApplicationEditor();
+        else if (searchOpen.value) closeSearch();
+        return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const tabbableElements = getTabbableElements(dialog);
+    const activeElement = document.activeElement as HTMLElement | null;
+    const first = tabbableElements[0];
+    const last = tabbableElements[tabbableElements.length - 1];
+
+    if (!first || !last) {
+        event.preventDefault();
+        focusDialogHeading(dialog);
+        return;
+    }
+
+    if (!activeElement || !tabbableElements.includes(activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
 }
 
 async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
@@ -237,9 +389,13 @@ function cancelScrape(): void {
 
 onUnmounted(() => {
     scrapeAbortController?.abort();
+    document.removeEventListener('focusin', handleDialogFocusin, true);
+    document.removeEventListener('keydown', handleDialogKeydown, true);
 });
 
 onMounted(() => {
+    document.addEventListener('focusin', handleDialogFocusin, true);
+    document.addEventListener('keydown', handleDialogKeydown, true);
     if (keywords.value.length > 0) void fetchJobs();
 });
 
@@ -250,10 +406,19 @@ watch(searchOpen, (open) => {
 </script>
 
 <template>
-    <main class="match-page">
+    <main
+        ref="matchPageRef"
+        class="match-page"
+        tabindex="-1"
+        :inert="dialogActive || undefined"
+    >
         <BrandBar />
 
-        <MatchEmpty v-if="!matchEnabled" @open-search="searchOpen = true" />
+        <MatchEmpty
+            v-if="!matchEnabled"
+            :search-open="searchOpen"
+            @open-search="openSearch"
+        />
         <template v-else>
             <!-- Initial load: this branch wins over the error state below so an
                  in-flight scrape stays cancellable even after an error frame —
@@ -288,39 +453,54 @@ watch(searchOpen, (open) => {
                 <MatchFilterBar
                     v-model:enabled="matchFilterOn"
                     v-model:threshold="matchThreshold"
-                    @search="searchOpen = true"
+                    :search-open="searchOpen"
+                    @search="openSearch"
                 />
                 <JobCardStack
                     :key="matchFilterOn ? 'min-' + matchThreshold : 'all'"
                     :jobs="visibleJobs"
                     :empty-label="emptyLabel"
                     :is-loading="isLoading"
+                    :application-editor-open="applicationEditorOpen"
                     @like="createJob"
                     @edit="openApplicationEditor"
                     @cancel="cancelScrape"
                 />
             </template>
         </template>
-
-        <div
-            :class="['overlay', { 'overlay--open': applicationEditorOpen }]"
-            @transitionend.self="finishClosingApplicationEditor"
-        >
-            <ApplicationEditorPage
-                v-if="activeJob"
-                :job="activeJob"
-                @back="closeApplicationEditor"
-            />
-        </div>
-
-        <div :class="['overlay', { 'overlay--open': searchOpen }]">
-            <SearchPage
-                :keywords="keywords"
-                @update:keywords="updateKeywords"
-                @back="searchOpen = false"
-            />
-        </div>
     </main>
+
+    <div
+        id="application-editor-dialog"
+        ref="applicationEditorDialogRef"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="application-editor-dialog-title"
+        :class="['overlay', { 'overlay--open': applicationEditorOpen }]"
+        @transitionend.self="finishClosingApplicationEditor"
+    >
+        <ApplicationEditorPage
+            v-if="activeJob"
+            :job="activeJob"
+            @back="closeApplicationEditor"
+        />
+    </div>
+
+    <div
+        id="search-dialog"
+        ref="searchDialogRef"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="search-dialog-title"
+        :class="['overlay', { 'overlay--open': searchOpen }]"
+        @transitionend.self="finishClosingSearch"
+    >
+        <SearchPage
+            :keywords="keywords"
+            @update:keywords="updateKeywords"
+            @back="closeSearch"
+        />
+    </div>
 </template>
 
 <style scoped src="./MatchPage.css"></style>

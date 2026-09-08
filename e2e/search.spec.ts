@@ -10,9 +10,7 @@ test.describe('Search page - distance input on mobile viewport', () => {
         await page.reload();
     });
 
-    test('renders with non-zero height and accepts input', async ({
-        page,
-    }) => {
+    test('renders with non-zero height and accepts input', async ({ page }) => {
         await page.getByRole('button', { name: 'Add keywords' }).click();
 
         const distanceInput = page.locator('#se-distance');
@@ -31,5 +29,43 @@ test.describe('Search page - distance input on mobile viewport', () => {
 
         await distanceInput.fill('25');
         await expect(distanceInput).toHaveValue('25');
+    });
+
+    test('keeps keyboard focus in the named dialog and restores its launcher', async ({
+        page,
+    }) => {
+        const main = page.locator('.match-page');
+        const trigger = page.getByRole('button', { name: 'Add keywords' });
+
+        await trigger.focus();
+        await page.keyboard.press('Enter');
+
+        const dialog = page.locator('#search-dialog');
+        const heading = dialog.getByRole('heading', {
+            level: 1,
+            name: 'Search Jobs',
+        });
+        const backButton = dialog.getByRole('button', { name: 'Back' });
+        const lastControl = dialog.locator('#se-date-posted');
+
+        await expect(dialog).toHaveRole('dialog');
+        await expect(dialog).toHaveAccessibleName('Search Jobs');
+        await expect(heading).toBeFocused();
+        await expect(main).toHaveAttribute('inert', '');
+        await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+        await page.keyboard.press('Tab');
+        await expect(backButton).toBeFocused();
+        await page.keyboard.press('Shift+Tab');
+        await expect(lastControl).toBeFocused();
+        await page.keyboard.press('Tab');
+        await expect(backButton).toBeFocused();
+
+        await page.keyboard.press('Escape');
+
+        await expect(dialog).not.toHaveClass(/overlay--open/);
+        await expect(main).not.toHaveAttribute('inert', '');
+        await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        await expect(trigger).toBeFocused();
     });
 });
