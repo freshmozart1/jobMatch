@@ -12,12 +12,13 @@ export function createSseResponse(events: unknown[], init: ResponseInit = {}) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
         start(controller) {
-            controller.enqueue(encoder.encode('ping\n\n'));
+            controller.enqueue(encoder.encode(': ping\n\n'));
             for (const event of events) {
                 controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
                 );
             }
+            controller.enqueue(encoder.encode(': keepalive\n\n'));
             controller.close();
         },
     });

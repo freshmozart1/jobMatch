@@ -29,6 +29,16 @@ npm run test:e2e     # Playwright e2e tests
 - `@/*` → `src/*`
 - `@pages` → `src/pages/index.ts`
 
+## Scrape stream
+
+`POST /scrape/linkedin` requires jobMatchServer v5.0.0 or newer. Every SSE
+`data:` frame is discriminated by `type`: `job` wraps the `ScrapedJob`,
+`progress` is tagged with its keyword, and `error` carries a safe string reason.
+`MatchPage.vue` must switch exhaustively on this union; do not restore the old
+`'error' in event` sniff or accept unwrapped jobs. Progress snapshots are kept
+per keyword so concurrent scraper runs can interleave without combining their
+positions, while failed/dropped counts are summed for the user-facing warning.
+
 ## Playwright (e2e)
 
 - First run requires: `npx playwright install`

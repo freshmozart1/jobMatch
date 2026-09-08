@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.4.0
+
+### Added
+
+- The match page now consumes jobMatchServer's typed scrape stream and shows live, keyword-specific discovery/scanning progress, the number of new jobs received, elapsed time, and an aggregate count of results that could not be read. Progress remains visible above a populated deck, and its fixed height is included in the mobile card budget (closes #71).
+
+### Changed
+
+- Scrape jobs and errors must now arrive as discriminated `{ type: "job", job }` and `{ type: "error", ... }` frames. The legacy unwrapped-job/error-key sniffing contract is no longer supported; deploy this release together with jobMatchServer v5.0.0.
+
 ## v0.3.0
 
 ### Added
