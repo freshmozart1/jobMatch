@@ -12,6 +12,24 @@
     background: var(--page-background-color, var(--background-color));
 }
 
+.match-page--scraping-with-jobs {
+    --job-card-height: min(
+        695px,
+        calc(
+            100svh - var(--match-top-padding) - var(--match-bottom-padding) -
+                var(--match-bottom-safe-area) - var(--match-card-control-gap) -
+                var(--like-container-height) - var(--brandbar-height) -
+                var(--match-card-control-gap) - var(--scrape-progress-height) -
+                var(--match-card-control-gap) - var(--match-filter-height) -
+                var(--match-card-control-gap)
+        )
+    );
+}
+
+.match-page--scraping-with-jobs :deep(.scrape-progress) {
+    margin-bottom: var(--match-card-control-gap);
+}
+
 .match-page__status {
     max-width: var(--job-card-width);
     margin: 0;
@@ -42,10 +60,10 @@
     justify-content: center;
 }
 
-/* Only the "Loading jobs..." line pulses — an error frame rendered above it as
+/* Only the active progress line pulses — an error frame rendered above it as
    a warning is a settled fact, not a sign of ongoing work. */
 @media (prefers-reduced-motion: no-preference) {
-    .match-status-fill .match-page__status:not(.match-page__status--warning) {
+    .match-status-fill :deep(.scrape-progress__primary) {
         animation: match-status-pulse 1.4s ease-in-out infinite;
     }
 }

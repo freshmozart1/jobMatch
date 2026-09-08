@@ -28,10 +28,15 @@ to be running for jobMatch to do anything. See
   and a "date posted" window (past 24 hours / week / month)
   (`src/pages/match/SearchPage.vue`). Everything is persisted in `localStorage`,
   so your search survives a reload, and changing it re-runs the scrape.
+- **Live scrape progress** — the match page shows which keyword is active, how
+  many jobs have been discovered or scanned, how many new cards have arrived,
+  elapsed time, and a quiet count of results that could not be read. Progress
+  remains visible above the filter while the deck fills, so a slow scrape does
+  not look frozen.
 - **Stop a running search** — a scrape can take minutes, so both loading states
   carry a Cancel button (`src/components/CancelScrapeButton.vue`): the
-  full-area "Loading jobs..." state on the match page, and the "Loading more
-  jobs..." state of the deck itself, which you reach by swiping through the
+  full-area progress state on the match page, and the "Waiting for more jobs…"
+  state of the deck itself, which you reach by swiping through the
   jobs that already arrived while the scrape is still running. Cancelling
   aborts the in-flight `POST /scrape/linkedin` request, keeps every job
   streamed in so far on screen and swipeable, and settles into "Search

@@ -13,6 +13,7 @@
     );
     --brandbar-height: 26px;
     --match-filter-height: 46px;
+    --scrape-progress-height: 58px;
     --job-card-width: min(
         354px,
         calc(

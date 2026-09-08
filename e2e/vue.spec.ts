@@ -20,6 +20,7 @@ const mockJob = {
 async function loadPopulatedMatchPage(
     page: Page,
     viewport: { width: number; height: number },
+    activeScrape = false,
 ): Promise<void> {
     await page.setViewportSize(viewport);
     await page.addInitScript(() => {
@@ -28,13 +29,63 @@ async function loadPopulatedMatchPage(
             JSON.stringify(['frontend']),
         );
     });
-    await page.route('**/scrape/linkedin', async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'text/event-stream',
-            body: `data: ${JSON.stringify(mockJob)}\n\n`,
+    if (activeScrape) {
+        await page.addInitScript((job) => {
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, init) => {
+                if (String(input).endsWith('/scrape/linkedin')) {
+                    const encoder = new TextEncoder();
+                    const stream = new ReadableStream<Uint8Array>({
+                        start(controller) {
+                            controller.enqueue(
+                                encoder.encode(
+                                    `data: ${JSON.stringify({
+                                        type: 'progress',
+                                        keyword: 'frontend',
+                                        stage: 'scanning',
+                                        current: 7,
+                                        total: 28,
+                                        failed: 1,
+                                        dropped: 2,
+                                    })}\n\n`,
+                                ),
+                            );
+                            controller.enqueue(
+                                encoder.encode(
+                                    `data: ${JSON.stringify({ type: 'job', job })}\n\n`,
+                                ),
+                            );
+                            init?.signal?.addEventListener('abort', () => {
+                                controller.error(
+                                    new DOMException(
+                                        'The user aborted a request.',
+                                        'AbortError',
+                                    ),
+                                );
+                            });
+                        },
+                    });
+                    return Promise.resolve(
+                        new Response(stream, {
+                            status: 200,
+                            headers: {
+                                'Content-Type': 'text/event-stream',
+                            },
+                        }),
+                    );
+                }
+                return originalFetch(input, init);
+            };
+        }, mockJob);
+    } else {
+        await page.route('**/scrape/linkedin', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/event-stream',
+                body: `data: ${JSON.stringify({ type: 'job', job: mockJob })}\n\n`,
+            });
         });
-    });
+    }
     await page.route('**/cv/*/status', async (route) => {
         await route.fulfill({ status: 404 });
     });
@@ -73,6 +124,35 @@ test('keeps the card and like controls visible on mobile portrait', async ({
     await expect(page.locator('.like-container')).toHaveCSS(
         'position',
         'sticky',
+    );
+});
+
+test('keeps live progress and populated controls inside a mobile viewport', async ({
+    page,
+}) => {
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 }, true);
+
+    await expect(page.locator('.scrape-progress__primary')).toHaveText(
+        'Scanning “frontend”: 7 of 28',
+    );
+    await expect(page.locator('.scrape-progress__warning')).toHaveText(
+        '3 results couldn’t be read',
+    );
+
+    const documentHeight = await page.evaluate(() =>
+        Math.max(
+            document.body.scrollHeight,
+            document.documentElement.scrollHeight,
+        ),
+    );
+    expect(documentHeight).toBeLessThanOrEqual(844);
+
+    const likeContainerBox = await page
+        .locator('.like-container')
+        .boundingBox();
+    expect(likeContainerBox).not.toBeNull();
+    expect(likeContainerBox!.y + likeContainerBox!.height).toBeLessThanOrEqual(
+        844,
     );
 });
 

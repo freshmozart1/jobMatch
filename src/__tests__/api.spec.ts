@@ -264,7 +264,7 @@ describe('postJsonEventStream', () => {
         expect(events).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     });
 
-    it('ignores non-"data:" frames such as the bare ping keepalive', async () => {
+    it('ignores SSE comments such as ping and keepalive frames', async () => {
         fetchMock.mockResolvedValue(createSseResponse([{ id: 1 }]));
 
         const events = await collect(

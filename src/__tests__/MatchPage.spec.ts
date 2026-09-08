@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils';
 import { JobCardContainer, LikeContainer } from '@/components';
 import MatchPage from '@/pages/match/MatchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import type { ScrapeStreamFrame } from '@/pages/match/scrapeStream';
 import { createSseResponse, swipeTopCard } from './testUtils';
 
 const testJobs: ScrapedJob[] = [
@@ -56,6 +57,14 @@ const testJobs: ScrapedJob[] = [
     },
 ];
 
+function jobFrame(job: ScrapedJob): ScrapeStreamFrame {
+    return { type: 'job', job };
+}
+
+function jobFrames(jobs: ScrapedJob[]): ScrapeStreamFrame[] {
+    return jobs.map(jobFrame);
+}
+
 function createJsonResponse(body: unknown, init: ResponseInit = {}) {
     return new Response(JSON.stringify(body), {
         status: 200,
@@ -70,7 +79,7 @@ function createControllableSseResponse() {
     const stream = new ReadableStream<Uint8Array>({
         start(controller) {
             controllerRef = controller;
-            controller.enqueue(encoder.encode('ping\n\n'));
+            controller.enqueue(encoder.encode(': ping\n\n'));
         },
     });
     return {
@@ -78,7 +87,7 @@ function createControllableSseResponse() {
             status: 200,
             headers: { 'Content-Type': 'text/event-stream' },
         }),
-        push(event: unknown) {
+        push(event: ScrapeStreamFrame) {
             controllerRef.enqueue(
                 encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
             );
@@ -111,7 +120,7 @@ function mountWithControllableStream() {
 
 async function mountWithFirstJobStreamed() {
     const { wrapper, stream } = mountWithControllableStream();
-    stream.push(testJobs[0]);
+    stream.push(jobFrame(testJobs[0]!));
     await vi.waitFor(() => {
         expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
     });
@@ -125,8 +134,8 @@ async function mountWithDeduplicatedJobStreamed() {
     };
     const { wrapper, stream } = await mountWithFirstJobStreamed();
 
-    stream.push(duplicateOfFirstJob);
-    stream.push(testJobs[1]);
+    stream.push(jobFrame(duplicateOfFirstJob));
+    stream.push(jobFrame(testJobs[1]!));
     stream.close();
 
     await vi.waitFor(() => {
@@ -153,7 +162,7 @@ function mockFetch(playwrightHandler?: () => Promise<Response>) {
         if (url.endsWith('/scrape/linkedin')) {
             return playwrightHandler
                 ? playwrightHandler()
-                : createSseResponse(testJobs);
+                : createSseResponse(jobFrames(testJobs));
         }
         if (url.endsWith('/jobs/create')) {
             return createJsonResponse({});
@@ -255,6 +264,7 @@ describe('MatchPage', () => {
     });
 
     afterEach(() => {
+        vi.useRealTimers();
         vi.unstubAllGlobals();
         window.localStorage.clear();
     });
@@ -336,7 +346,7 @@ describe('MatchPage', () => {
                 if (input.endsWith('/scrape/linkedin')) {
                     playwrightCallCount++;
                     if (playwrightCallCount === 1) return staleDeferred.promise;
-                    return createSseResponse(testJobs);
+                    return createSseResponse(jobFrames(testJobs));
                 }
                 return createJsonResponse({});
             }),
@@ -357,7 +367,7 @@ describe('MatchPage', () => {
         });
 
         // Resolve the stale first response — generation guard must discard it.
-        staleDeferred.resolve(createSseResponse(testJobs));
+        staleDeferred.resolve(createSseResponse(jobFrames(testJobs)));
         await wrapper.vm.$nextTick();
         await wrapper.vm.$nextTick();
 
@@ -428,13 +438,13 @@ describe('MatchPage', () => {
 
         // Jobs not yet available — shows loading placeholder.
         await wrapper.vm.$nextTick();
-        expect(wrapper.find('.match-page__status').text()).toBe(
-            'Loading jobs...',
+        expect(wrapper.find('.scrape-progress__primary').text()).toBe(
+            'Finding jobs…',
         );
         expect(wrapper.findComponent(JobCardContainer).exists()).toBe(false);
 
         // Resolve the playwright response — card stack appears.
-        deferred.resolve(createSseResponse(testJobs));
+        deferred.resolve(createSseResponse(jobFrames(testJobs)));
 
         await vi.waitFor(() => {
             expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
@@ -445,12 +455,101 @@ describe('MatchPage', () => {
         const { wrapper, stream } = await mountWithFirstJobStreamed();
         expect(wrapper.find('.job-card-stack__next').exists()).toBe(false);
 
-        stream.push(testJobs[1]);
+        stream.push(jobFrame(testJobs[1]!));
         await vi.waitFor(() => {
             expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
         });
 
         stream.close();
+    });
+
+    it('shows the latest keyword progress and aggregates unreadable results across runs', async () => {
+        const { wrapper, stream } = mountWithControllableStream();
+
+        stream.push({
+            type: 'progress',
+            keyword: 'TypeScript',
+            stage: 'loading',
+            discovered: 12,
+        });
+        await vi.waitFor(() => {
+            expect(wrapper.find('.scrape-progress__primary').text()).toBe(
+                'Finding jobs for “TypeScript”… 12 jobs discovered',
+            );
+        });
+
+        stream.push({
+            type: 'progress',
+            keyword: 'TypeScript',
+            stage: 'scanning',
+            current: 7,
+            total: 28,
+            failed: 1,
+            dropped: 1,
+        });
+        stream.push(jobFrame(testJobs[0]!));
+        stream.push({
+            type: 'progress',
+            keyword: 'Vue',
+            stage: 'scanning',
+            current: 3,
+            total: 9,
+            failed: 1,
+            dropped: 0,
+        });
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.scrape-progress__primary').text()).toBe(
+                'Scanning “Vue”: 3 of 9',
+            );
+            expect(wrapper.find('.scrape-progress__secondary').text()).toBe(
+                '1 new job · 0:00 elapsed',
+            );
+            expect(wrapper.find('.scrape-progress__warning').text()).toBe(
+                '3 results couldn’t be read',
+            );
+        });
+        expect(wrapper.find('.match-page').classes()).toContain(
+            'match-page--scraping-with-jobs',
+        );
+        expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
+
+        stream.push({
+            type: 'progress',
+            keyword: 'TypeScript',
+            stage: 'scanning',
+            current: 7,
+            total: 28,
+            failed: 0,
+            dropped: 0,
+        });
+        await vi.waitFor(() => {
+            expect(wrapper.find('.scrape-progress__warning').text()).toBe(
+                '1 result couldn’t be read',
+            );
+        });
+        stream.close();
+        await vi.waitFor(() => {
+            expect(wrapper.find('.scrape-progress').exists()).toBe(false);
+            expect(wrapper.find('.match-page__status--warning').text()).toBe(
+                '1 result couldn’t be read',
+            );
+        });
+    });
+
+    it('updates elapsed time from a monotonic clock and stops it on cancel', async () => {
+        vi.useFakeTimers();
+        const { wrapper } = mountWithControllableStream();
+        await wrapper.vm.$nextTick();
+
+        await vi.advanceTimersByTimeAsync(61_000);
+        expect(wrapper.find('.scrape-progress__secondary').text()).toBe(
+            '0 new jobs · 1:01 elapsed',
+        );
+
+        await wrapper.find('.scrape-cancel').trigger('click');
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(wrapper.find('.scrape-progress').exists()).toBe(false);
     });
 
     it('collapses a duplicate streamed job (same duplicateKey) into a single deck entry', async () => {
@@ -487,7 +586,11 @@ describe('MatchPage', () => {
     it('surfaces a per-scrape SSE error frame as an error message', async () => {
         const { wrapper, stream } = mountWithControllableStream();
 
-        stream.push({ error: 'Scrape failed', reason: 'boom' });
+        stream.push({
+            type: 'error',
+            error: 'Scrape failed',
+            reason: 'boom',
+        });
         stream.close();
 
         await vi.waitFor(() => {
@@ -500,7 +603,11 @@ describe('MatchPage', () => {
     it('keeps already-streamed jobs visible alongside a per-scrape SSE error banner', async () => {
         const { wrapper, stream } = await mountWithFirstJobStreamed();
 
-        stream.push({ error: 'Scrape failed', reason: 'boom' });
+        stream.push({
+            type: 'error',
+            error: 'Scrape failed',
+            reason: 'boom',
+        });
         stream.close();
 
         await vi.waitFor(() => {
@@ -884,8 +991,8 @@ describe('MatchPage', () => {
         await wrapper.vm.$nextTick();
 
         expect(
-            wrapper.find('.match-status-fill .match-page__status').text(),
-        ).toBe('Loading jobs...');
+            wrapper.find('.match-status-fill .scrape-progress__primary').text(),
+        ).toBe('Finding jobs…');
         expect(wrapper.find('.match-status-fill .scrape-cancel').text()).toBe(
             'Cancel',
         );
@@ -931,16 +1038,16 @@ describe('MatchPage', () => {
     it('keeps the already-streamed jobs when the scrape is cancelled', async () => {
         const { wrapper, stream } = await mountWithFirstJobStreamed();
 
-        stream.push(testJobs[1]);
+        stream.push(jobFrame(testJobs[1]!));
         await vi.waitFor(() => {
             expect(wrapper.find('.job-card-stack__next').exists()).toBe(true);
         });
 
         // Swipe past the whole partial deck — the stack now shows the
-        // "loading more" label with the cancel control beside it.
+        // Waiting label with the cancel control beside it.
         await swipeAllCards(wrapper, testJobs.length);
         expect(wrapper.find('.job-card-stack__loading').text()).toBe(
-            'Loading more jobs...',
+            'Waiting for more jobs…',
         );
 
         await wrapper.find('.scrape-cancel').trigger('click');
@@ -988,7 +1095,7 @@ describe('MatchPage', () => {
                         );
                         return stream.response;
                     }
-                    return createSseResponse(testJobs);
+                    return createSseResponse(jobFrames(testJobs));
                 }
                 return createJsonResponse({});
             }),
@@ -1016,7 +1123,11 @@ describe('MatchPage', () => {
     it('keeps the scrape cancellable when an error frame arrives before any job', async () => {
         const { wrapper, stream } = mountWithControllableStream();
 
-        stream.push({ error: 'Scrape failed', reason: 'boom' });
+        stream.push({
+            type: 'error',
+            error: 'Scrape failed',
+            reason: 'boom',
+        });
 
         await vi.waitFor(() => {
             expect(

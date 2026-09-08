@@ -8,24 +8,20 @@ import {
 } from '@/components';
 import ApplicationEditorPage from './ApplicationEditorPage.vue';
 import MatchEmpty from './MatchEmpty.vue';
+import ScrapeProgressStatus from './ScrapeProgressStatus.vue';
 import SearchPage from './SearchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 import { postJson, postJsonEventStream } from '@/lib/api';
 import { DEFAULT_DATE_POSTED } from './searchParams';
-
-type ScrapeErrorEvent = { error: string; reason: unknown };
-type ScrapeStreamEvent = ScrapedJob | ScrapeErrorEvent;
-
-function isScrapeErrorEvent(
-    event: ScrapeStreamEvent,
-): event is ScrapeErrorEvent {
-    return 'error' in event;
-}
+import type { ScrapeProgressFrame, ScrapeStreamFrame } from './scrapeStream';
 
 const jobs = ref<ScrapedJob[]>([]);
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 const scrapeCancelled = ref(false);
+const latestProgress = ref<ScrapeProgressFrame | null>(null);
+const progressByKeyword = ref(new Map<string, ScrapeProgressFrame>());
+const elapsedSeconds = ref(0);
 const matchFilterOn = ref(false);
 const matchThreshold = ref(50);
 const keywords = ref<string[]>(loadKeywords());
@@ -52,6 +48,38 @@ const visibleJobs = computed(() =>
           )
         : jobs.value,
 );
+const progressLabel = computed(() => {
+    const progress = latestProgress.value;
+    if (!progress) return 'Finding jobs…';
+    if (progress.stage === 'loading') {
+        const noun = progress.discovered === 1 ? 'job' : 'jobs';
+        return `Finding jobs for “${progress.keyword}”… ${progress.discovered} ${noun} discovered`;
+    }
+    return `Scanning “${progress.keyword}”: ${progress.current} of ${progress.total}`;
+});
+const elapsedLabel = computed(() => {
+    const minutes = Math.floor(elapsedSeconds.value / 60);
+    const seconds = String(elapsedSeconds.value % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+});
+const progressSecondaryLabel = computed(() => {
+    const noun = jobs.value.length === 1 ? 'job' : 'jobs';
+    return `${jobs.value.length} new ${noun} · ${elapsedLabel.value} elapsed`;
+});
+const unreadableResultCount = computed(() => {
+    let count = 0;
+    progressByKeyword.value.forEach((progress) => {
+        if (progress.stage === 'scanning') {
+            count += progress.failed + progress.dropped;
+        }
+    });
+    return count;
+});
+const progressWarning = computed(() => {
+    const count = unreadableResultCount.value;
+    if (count === 0) return null;
+    return `${count} ${count === 1 ? 'result' : 'results'} couldn’t be read`;
+});
 const emptyLabel = computed(() => {
     // With nothing scraped at all, the threshold wording would blame the filter
     // for an empty deck the cancelled scrape is responsible for.
@@ -284,6 +312,25 @@ async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
 
 let scrapeGeneration = 0;
 let scrapeAbortController: AbortController | null = null;
+let scrapeStartedAt = 0;
+let elapsedTimer: ReturnType<typeof setInterval> | null = null;
+
+function stopElapsedTimer(): void {
+    if (elapsedTimer === null) return;
+    clearInterval(elapsedTimer);
+    elapsedTimer = null;
+}
+
+function startElapsedTimer(): void {
+    stopElapsedTimer();
+    elapsedSeconds.value = 0;
+    scrapeStartedAt = performance.now();
+    elapsedTimer = setInterval(() => {
+        elapsedSeconds.value = Math.floor(
+            (performance.now() - scrapeStartedAt) / 1000,
+        );
+    }, 1000);
+}
 
 let lastFetchedParams: {
     keywords: string[];
@@ -309,20 +356,26 @@ function searchParamsChanged(): boolean {
     );
 }
 
-// One frame of the scrape stream: an error frame updates the banner without
-// ending the scrape, and a job frame is kept only the first time its
-// duplicateKey is seen.
 function applyScrapeEvent(
-    event: ScrapeStreamEvent,
+    event: ScrapeStreamFrame,
     seenDuplicateKeys: Set<string>,
 ): void {
-    if (isScrapeErrorEvent(event)) {
-        errorMessage.value = event.error;
-        return;
+    switch (event.type) {
+        case 'error':
+            errorMessage.value = event.error;
+            return;
+        case 'progress':
+            latestProgress.value = event;
+            progressByKeyword.value.set(event.keyword, event);
+            return;
+        case 'job':
+            if (seenDuplicateKeys.has(event.job.duplicateKey)) return;
+            seenDuplicateKeys.add(event.job.duplicateKey);
+            jobs.value.push(event.job);
+            return;
+        default:
+            event satisfies never;
     }
-    if (seenDuplicateKeys.has(event.duplicateKey)) return;
-    seenDuplicateKeys.add(event.duplicateKey);
-    jobs.value.push(event);
 }
 
 async function fetchJobs(): Promise<void> {
@@ -341,10 +394,13 @@ async function fetchJobs(): Promise<void> {
     jobs.value = [];
     errorMessage.value = null;
     scrapeCancelled.value = false;
+    latestProgress.value = null;
+    progressByKeyword.value.clear();
+    startElapsedTimer();
     const seenDuplicateKeys = new Set<string>();
 
     try {
-        for await (const event of postJsonEventStream<ScrapeStreamEvent>(
+        for await (const event of postJsonEventStream<ScrapeStreamFrame>(
             '/scrape/linkedin',
             {
                 keywords: keywords.value,
@@ -369,6 +425,7 @@ async function fetchJobs(): Promise<void> {
     } finally {
         if (scrapeGeneration === myGeneration) {
             isLoading.value = false;
+            stopElapsedTimer();
         }
     }
 }
@@ -379,6 +436,7 @@ function cancelScrape(): void {
     // aborted stream to reject — a stream that has already been fully buffered
     // drains to `done` instead of erroring, and never rejects at all.
     isLoading.value = false;
+    stopElapsedTimer();
     // Forget the cancelled scrape's parameters so that reopening and closing
     // the search sheet re-runs the *same* search. Without this the user has no
     // way back to the search they stopped, which is the dead end the cancel
@@ -389,6 +447,7 @@ function cancelScrape(): void {
 
 onUnmounted(() => {
     scrapeAbortController?.abort();
+    stopElapsedTimer();
     document.removeEventListener('focusin', handleDialogFocusin, true);
     document.removeEventListener('keydown', handleDialogKeydown, true);
 });
@@ -408,7 +467,10 @@ watch(searchOpen, (open) => {
 <template>
     <main
         ref="matchPageRef"
-        class="match-page"
+        :class="[
+            'match-page',
+            { 'match-page--scraping-with-jobs': isLoading && jobs.length > 0 },
+        ]"
         tabindex="-1"
         :inert="dialogActive || undefined"
     >
@@ -434,7 +496,11 @@ watch(searchOpen, (open) => {
                 >
                     {{ errorMessage }}
                 </p>
-                <p class="match-page__status">Loading jobs...</p>
+                <ScrapeProgressStatus
+                    :label="progressLabel"
+                    :secondary="progressSecondaryLabel"
+                    :warning="progressWarning"
+                />
                 <CancelScrapeButton @cancel="cancelScrape" />
             </div>
             <p
@@ -444,11 +510,23 @@ watch(searchOpen, (open) => {
                 {{ errorMessage }}
             </p>
             <template v-else>
+                <ScrapeProgressStatus
+                    v-if="isLoading"
+                    :label="progressLabel"
+                    :secondary="progressSecondaryLabel"
+                    :warning="progressWarning"
+                />
                 <p
                     v-if="errorMessage"
                     class="match-page__status match-page__status--warning"
                 >
                     {{ errorMessage }}
+                </p>
+                <p
+                    v-if="!isLoading && progressWarning"
+                    class="match-page__status match-page__status--warning"
+                >
+                    {{ progressWarning }}
                 </p>
                 <MatchFilterBar
                     v-model:enabled="matchFilterOn"
@@ -461,6 +539,7 @@ watch(searchOpen, (open) => {
                     :jobs="visibleJobs"
                     :empty-label="emptyLabel"
                     :is-loading="isLoading"
+                    loading-label="Waiting for more jobs…"
                     :application-editor-open="applicationEditorOpen"
                     @like="createJob"
                     @edit="openApplicationEditor"
