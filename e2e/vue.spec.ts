@@ -35,6 +35,9 @@ async function loadPopulatedMatchPage(
             body: `data: ${JSON.stringify(mockJob)}\n\n`,
         });
     });
+    await page.route('**/cv/*/status', async (route) => {
+        await route.fulfill({ status: 404 });
+    });
     await page.goto('/');
 
     await expect(page.locator('.match-filter')).toBeVisible();
@@ -95,4 +98,31 @@ test('keeps sticky like controls visible while swiping on compact portrait', asy
     await expect(likeContainer).toBeVisible();
     await page.mouse.up();
     await expect(likeContainer).toBeVisible();
+});
+
+test('unmounts the Application Editor after its closing animation and reopens cleanly', async ({
+    page,
+}) => {
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+
+    const overlay = page.locator('.overlay').first();
+    const editor = overlay.locator('.editor');
+    const editButton = page.getByRole('button', {
+        name: 'Open application editor',
+    });
+
+    await editButton.click();
+    await expect(editor).toBeVisible();
+
+    await editor.getByRole('button', { name: 'Back' }).click();
+
+    await expect(overlay).not.toHaveClass(/overlay--open/);
+    await expect(editor).toHaveCount(0);
+
+    await editButton.click();
+
+    await expect(editor).toBeVisible();
+    await expect(editor.locator('.cl-header__title')).toHaveText(
+        'Application Editor',
+    );
 });

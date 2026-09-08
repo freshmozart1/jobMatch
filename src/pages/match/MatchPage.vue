@@ -113,6 +113,12 @@ function closeApplicationEditor(): void {
     applicationEditorOpen.value = false;
 }
 
+function finishClosingApplicationEditor(event: TransitionEvent): void {
+    if (event.propertyName !== 'visibility' || applicationEditorOpen.value)
+        return;
+    activeJob.value = null;
+}
+
 async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
     try {
         await postJson('/jobs/create', { job, like });
@@ -296,7 +302,10 @@ watch(searchOpen, (open) => {
             </template>
         </template>
 
-        <div :class="['overlay', { 'overlay--open': applicationEditorOpen }]">
+        <div
+            :class="['overlay', { 'overlay--open': applicationEditorOpen }]"
+            @transitionend.self="finishClosingApplicationEditor"
+        >
             <ApplicationEditorPage
                 v-if="activeJob"
                 :job="activeJob"
