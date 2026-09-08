@@ -528,6 +528,55 @@ describe('MatchPage', () => {
         );
     });
 
+    it('unmounts the Application Editor only after its closing visibility transition', async () => {
+        const wrapper = await mountLoadedMatchPage();
+        const overlay = () => wrapper.findAll('.overlay')[0]!;
+
+        await wrapper.find('.like-container__button--edit').trigger('click');
+        const firstEditor = overlay().find('.editor').element;
+
+        await overlay().find('.cl-header__back').trigger('click');
+
+        expect(overlay().classes()).not.toContain('overlay--open');
+        expect(overlay().find('.editor').exists()).toBe(true);
+
+        await overlay()
+            .find('.editor')
+            .trigger('transitionend', { propertyName: 'visibility' });
+        await overlay().trigger('transitionend', { propertyName: 'opacity' });
+
+        expect(overlay().find('.editor').exists()).toBe(true);
+
+        await overlay().trigger('transitionend', {
+            propertyName: 'visibility',
+        });
+
+        expect(overlay().find('.editor').exists()).toBe(false);
+
+        await wrapper.find('.like-container__button--edit').trigger('click');
+
+        expect(overlay().find('.editor').exists()).toBe(true);
+        expect(overlay().find('.editor').element).not.toBe(firstEditor);
+        expect(overlay().find('.cl-header__title').text()).toBe(
+            'Application Editor',
+        );
+    });
+
+    it('does not unmount the Application Editor when it reopens during the fly-out', async () => {
+        const wrapper = await mountLoadedMatchPage();
+        const overlay = () => wrapper.findAll('.overlay')[0]!;
+
+        await wrapper.find('.like-container__button--edit').trigger('click');
+        await overlay().find('.cl-header__back').trigger('click');
+        await wrapper.find('.like-container__button--edit').trigger('click');
+        await overlay().trigger('transitionend', {
+            propertyName: 'visibility',
+        });
+
+        expect(overlay().classes()).toContain('overlay--open');
+        expect(overlay().find('.editor').exists()).toBe(true);
+    });
+
     it('renders the mobile layout anchors for the card stack and sticky controls', async () => {
         const wrapper = await mountLoadedMatchPage();
 
