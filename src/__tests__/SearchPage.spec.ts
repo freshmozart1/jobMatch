@@ -7,6 +7,16 @@ describe('SearchPage', () => {
         vi.useFakeTimers();
     });
 
+    it('renders a programmatically focusable Search dialog heading', () => {
+        const wrapper = mount(SearchPage, { props: { keywords: [] } });
+        const heading = wrapper.find('.cl-header__title');
+
+        expect(heading.element.tagName).toBe('H1');
+        expect(heading.text()).toBe('Search Jobs');
+        expect(heading.attributes('id')).toBe('search-dialog-title');
+        expect(heading.attributes('tabindex')).toBe('-1');
+    });
+
     afterEach(() => {
         vi.useRealTimers();
         window.localStorage.clear();

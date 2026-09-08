@@ -100,29 +100,52 @@ test('keeps sticky like controls visible while swiping on compact portrait', asy
     await expect(likeContainer).toBeVisible();
 });
 
-test('unmounts the Application Editor after its closing animation and reopens cleanly', async ({
+test('keeps Application Editor focus modal, restores its launcher, and reopens cleanly', async ({
     page,
 }) => {
     await loadPopulatedMatchPage(page, { width: 390, height: 844 });
 
-    const overlay = page.locator('.overlay').first();
-    const editor = overlay.locator('.editor');
+    const main = page.locator('.match-page');
     const editButton = page.getByRole('button', {
         name: 'Open application editor',
     });
 
-    await editButton.click();
+    await editButton.focus();
+    await page.keyboard.press('Enter');
+
+    const dialog = page.locator('#application-editor-dialog');
+    const editor = dialog.locator('.editor');
+    const heading = dialog.getByRole('heading', {
+        level: 1,
+        name: 'Application Editor',
+    });
+    const backButton = dialog.getByRole('button', { name: 'Back' });
+    const actionRows = dialog.locator('.cl-action__row');
+
     await expect(editor).toBeVisible();
+    await expect(dialog).toHaveRole('dialog');
+    await expect(dialog).toHaveAccessibleName('Application Editor');
+    await expect(heading).toBeFocused();
+    await expect(main).toHaveAttribute('inert', '');
+    await expect(editButton).toHaveAttribute('aria-expanded', 'true');
 
-    await editor.getByRole('button', { name: 'Back' }).click();
+    await page.keyboard.press('Tab');
+    await expect(backButton).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(actionRows.last()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(backButton).toBeFocused();
 
-    await expect(overlay).not.toHaveClass(/overlay--open/);
+    await page.keyboard.press('Escape');
+
+    await expect(dialog).not.toHaveClass(/overlay--open/);
     await expect(editor).toHaveCount(0);
+    await expect(main).not.toHaveAttribute('inert', '');
+    await expect(editButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(editButton).toBeFocused();
 
-    await editButton.click();
+    await page.keyboard.press('Enter');
 
     await expect(editor).toBeVisible();
-    await expect(editor.locator('.cl-header__title')).toHaveText(
-        'Application Editor',
-    );
+    await expect(heading).toBeFocused();
 });

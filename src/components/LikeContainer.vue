@@ -3,14 +3,20 @@ withDefaults(
     defineProps<{
         likeOpacity?: number;
         dislikeOpacity?: number;
+        applicationEditorOpen?: boolean;
     }>(),
     {
         likeOpacity: 0.33,
         dislikeOpacity: 0.33,
+        applicationEditorOpen: false,
     },
 );
 
-defineEmits<{ edit: [] }>();
+const emit = defineEmits<{ edit: [trigger: HTMLButtonElement] }>();
+
+function openApplicationEditor(event: MouseEvent): void {
+    emit('edit', event.currentTarget as HTMLButtonElement);
+}
 </script>
 
 <template>
@@ -36,7 +42,10 @@ defineEmits<{ edit: [] }>();
             type="button"
             class="like-container__button like-container__button--edit"
             aria-label="Open application editor"
-            @click="$emit('edit')"
+            aria-haspopup="dialog"
+            aria-controls="application-editor-dialog"
+            :aria-expanded="applicationEditorOpen"
+            @click="openApplicationEditor"
         >
             <svg
                 class="like-container__icon like-container__icon--edit"

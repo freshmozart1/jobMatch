@@ -1,9 +1,16 @@
 <script setup lang="ts">
-defineProps<{ enabled: boolean; threshold: number }>();
+withDefaults(
+    defineProps<{
+        enabled: boolean;
+        threshold: number;
+        searchOpen?: boolean;
+    }>(),
+    { searchOpen: false },
+);
 const emit = defineEmits<{
     'update:enabled': [value: boolean];
     'update:threshold': [value: number];
-    search: [];
+    search: [trigger: HTMLButtonElement];
 }>();
 
 function clamp(n: number): number {
@@ -15,6 +22,10 @@ function onThresholdInput(event: Event) {
         'update:threshold',
         clamp(Number((event.target as HTMLInputElement).value)),
     );
+}
+
+function openSearch(event: MouseEvent): void {
+    emit('search', event.currentTarget as HTMLButtonElement);
 }
 </script>
 
@@ -51,7 +62,10 @@ function onThresholdInput(event: Event) {
             type="button"
             class="match-filter__search"
             aria-label="Search jobs"
-            @click="emit('search')"
+            aria-haspopup="dialog"
+            aria-controls="search-dialog"
+            :aria-expanded="searchOpen"
+            @click="openSearch"
         >
             <svg
                 class="match-filter__search-icon"

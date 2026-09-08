@@ -177,6 +177,16 @@ async function mountLoadedMatchPage() {
     return wrapper;
 }
 
+async function mountLoadedMatchPageAttached() {
+    const wrapper = mount(MatchPage, { attachTo: document.body });
+
+    await vi.waitFor(() => {
+        expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
+    });
+
+    return wrapper;
+}
+
 function dragCurrentCard(wrapper: ReturnType<typeof mount>, clientX: number) {
     const card = wrapper.find('.job-card-stack__current .job-card').element;
     card.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0 }));
@@ -526,6 +536,159 @@ describe('MatchPage', () => {
         expect(overlay().find('.cl-header__title').text()).toBe(
             'Application Editor',
         );
+    });
+
+    it('provides full modal keyboard and focus behavior for the Application Editor', async () => {
+        const wrapper = await mountLoadedMatchPageAttached();
+        const main = wrapper.find('.match-page');
+        const dialog = wrapper.find('#application-editor-dialog');
+        const editButton = wrapper.find('.like-container__button--edit');
+
+        try {
+            (editButton.element as HTMLButtonElement).focus();
+            await editButton.trigger('click');
+
+            const heading = dialog.find('#application-editor-dialog-title');
+            expect(dialog.attributes('role')).toBe('dialog');
+            expect(dialog.attributes('aria-modal')).toBe('true');
+            expect(dialog.attributes('aria-labelledby')).toBe(
+                'application-editor-dialog-title',
+            );
+            expect(document.activeElement).toBe(heading.element);
+            expect(main.attributes('inert')).toBeDefined();
+            expect(editButton.attributes('aria-expanded')).toBe('true');
+
+            const backButton = dialog.find('.cl-header__back');
+            const actionRows = dialog.findAll('.cl-action__row');
+            const lastAction = actionRows[actionRows.length - 1]!;
+
+            (main.element as HTMLElement).focus();
+            expect(document.activeElement).toBe(heading.element);
+            await main.trigger('keydown', { key: 'Tab' });
+            expect(document.activeElement).toBe(backButton.element);
+
+            (backButton.element as HTMLButtonElement).focus();
+            await backButton.trigger('keydown', {
+                key: 'Tab',
+                shiftKey: true,
+            });
+            expect(document.activeElement).toBe(lastAction.element);
+
+            await lastAction.trigger('keydown', { key: 'Tab' });
+            expect(document.activeElement).toBe(backButton.element);
+
+            await backButton.trigger('keydown', { key: 'Escape' });
+            expect(dialog.classes()).not.toContain('overlay--open');
+            expect(main.attributes('inert')).toBeDefined();
+            expect(editButton.attributes('aria-expanded')).toBe('false');
+
+            await dialog.trigger('transitionend', {
+                propertyName: 'visibility',
+            });
+            await wrapper.vm.$nextTick();
+
+            expect(dialog.find('.editor').exists()).toBe(false);
+            expect(main.attributes('inert')).toBeUndefined();
+            expect(document.activeElement).toBe(editButton.element);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('provides full modal keyboard and focus behavior for Search', async () => {
+        window.localStorage.clear();
+        const wrapper = mount(MatchPage, { attachTo: document.body });
+        const main = wrapper.find('.match-page');
+        const dialog = wrapper.find('#search-dialog');
+        const trigger = wrapper.find('.match-empty__cta');
+
+        try {
+            (trigger.element as HTMLButtonElement).focus();
+            await trigger.trigger('click');
+
+            const heading = dialog.find('#search-dialog-title');
+            expect(dialog.attributes('role')).toBe('dialog');
+            expect(dialog.attributes('aria-modal')).toBe('true');
+            expect(dialog.attributes('aria-labelledby')).toBe(
+                'search-dialog-title',
+            );
+            expect(document.activeElement).toBe(heading.element);
+            expect(main.attributes('inert')).toBeDefined();
+            expect(trigger.attributes('aria-expanded')).toBe('true');
+
+            const backButton = dialog.find('.cl-header__back');
+            const lastControl = dialog.find('#se-date-posted');
+            (backButton.element as HTMLButtonElement).focus();
+            await backButton.trigger('keydown', {
+                key: 'Tab',
+                shiftKey: true,
+            });
+            expect(document.activeElement).toBe(lastControl.element);
+
+            await lastControl.trigger('keydown', { key: 'Tab' });
+            expect(document.activeElement).toBe(backButton.element);
+
+            await backButton.trigger('keydown', { key: 'Escape' });
+            expect(dialog.classes()).not.toContain('overlay--open');
+            expect(main.attributes('inert')).toBeDefined();
+
+            await dialog.trigger('transitionend', {
+                propertyName: 'visibility',
+            });
+            await wrapper.vm.$nextTick();
+
+            expect(main.attributes('inert')).toBeUndefined();
+            expect(trigger.attributes('aria-expanded')).toBe('false');
+            expect(document.activeElement).toBe(trigger.element);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('restores Search focus to the current launcher when the original CTA is replaced', async () => {
+        window.localStorage.clear();
+        const wrapper = mount(MatchPage, { attachTo: document.body });
+        const dialog = wrapper.find('#search-dialog');
+
+        try {
+            await wrapper.find('.match-empty__cta').trigger('click');
+            await dialog.find('#se-input').setValue('Vue');
+            await dialog.find('#se-input').trigger('keydown', { key: 'Enter' });
+            await wrapper.vm.$nextTick();
+
+            expect(wrapper.find('.match-empty__cta').exists()).toBe(false);
+            await dialog.find('.cl-header__back').trigger('click');
+            await vi.waitFor(() => {
+                expect(wrapper.find('.match-filter__search').exists()).toBe(
+                    true,
+                );
+            });
+            await dialog.trigger('transitionend', {
+                propertyName: 'visibility',
+            });
+
+            await vi.waitFor(() => {
+                expect(document.activeElement).toBe(
+                    wrapper.find('.match-filter__search').element,
+                );
+            });
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
+    it('does not open the Application Editor behind the Search dialog', async () => {
+        const wrapper = await mountLoadedMatchPage();
+
+        await wrapper.find('.match-filter__search').trigger('click');
+        await wrapper.find('.like-container__button--edit').trigger('click');
+
+        expect(wrapper.find('#search-dialog').classes()).toContain(
+            'overlay--open',
+        );
+        expect(
+            wrapper.find('#application-editor-dialog .editor').exists(),
+        ).toBe(false);
     });
 
     it('unmounts the Application Editor only after its closing visibility transition', async () => {

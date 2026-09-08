@@ -54,4 +54,19 @@ describe('MatchFilterBar', () => {
         expect(emitted[0]).toEqual([80]);
         expect(emitted[emitted.length - 1]).toEqual([100]);
     });
+
+    it('exposes and emits the Search dialog launcher state', async () => {
+        const wrapper = mountBar();
+        const searchButton = wrapper.find('.match-filter__search');
+
+        expect(searchButton.attributes('aria-haspopup')).toBe('dialog');
+        expect(searchButton.attributes('aria-controls')).toBe('search-dialog');
+        expect(searchButton.attributes('aria-expanded')).toBe('false');
+
+        await searchButton.trigger('click');
+
+        expect(wrapper.emitted('search')![0]).toEqual([searchButton.element]);
+        await wrapper.setProps({ searchOpen: true });
+        expect(searchButton.attributes('aria-expanded')).toBe('true');
+    });
 });

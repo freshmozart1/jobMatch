@@ -158,6 +158,9 @@ const hint = computed(() =>
 <template>
     <div class="cl-screen">
         <header class="cl-header">
+            <h1 id="search-dialog-title" class="cl-header__title" tabindex="-1">
+                Search Jobs
+            </h1>
             <button type="button" class="cl-header__back" @click="emit('back')">
                 <svg
                     width="11"
@@ -176,7 +179,6 @@ const hint = computed(() =>
                 </svg>
                 Back
             </button>
-            <span class="cl-header__title">Search Jobs</span>
         </header>
 
         <div class="se-body">
@@ -357,7 +359,9 @@ const hint = computed(() =>
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
+    margin: 0;
     font-size: 15px;
+    line-height: inherit;
     font-weight: 700;
     color: var(--text-color);
 }

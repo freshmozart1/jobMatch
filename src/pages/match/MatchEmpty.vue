@@ -1,5 +1,12 @@
 <script setup lang="ts">
-const emit = defineEmits<{ 'open-search': [] }>();
+withDefaults(defineProps<{ searchOpen?: boolean }>(), { searchOpen: false });
+const emit = defineEmits<{
+    'open-search': [trigger: HTMLButtonElement];
+}>();
+
+function openSearch(event: MouseEvent): void {
+    emit('open-search', event.currentTarget as HTMLButtonElement);
+}
 </script>
 
 <template>
@@ -21,7 +28,10 @@ const emit = defineEmits<{ 'open-search': [] }>();
         <button
             type="button"
             class="match-empty__cta"
-            @click="emit('open-search')"
+            aria-haspopup="dialog"
+            aria-controls="search-dialog"
+            :aria-expanded="searchOpen"
+            @click="openSearch"
         >
             Add keywords
         </button>

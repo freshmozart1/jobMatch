@@ -146,9 +146,13 @@ describe('ApplicationEditorPage', () => {
 
     it('mounts in the menu view with "Application Editor" header', () => {
         const wrapper = mount(ApplicationEditorPage, { props: { job } });
-        expect(wrapper.find('.cl-header__title').text()).toBe(
-            'Application Editor',
+        const heading = wrapper.find('.cl-header__title');
+        expect(heading.text()).toBe('Application Editor');
+        expect(heading.element.tagName).toBe('H1');
+        expect(heading.attributes('id')).toBe(
+            'application-editor-dialog-title',
         );
+        expect(heading.attributes('tabindex')).toBe('-1');
         expect(wrapper.find('.cl-menu').exists()).toBe(true);
     });
 
@@ -368,7 +372,9 @@ describe('ApplicationEditorPage', () => {
     // their mocks to the endpoint under test. `status`/`responseBody` let the
     // failure test reuse this instead of duplicating the URL-branching mock.
     function mockGenerateResponse(
-        responseBody: Record<string, unknown> = { coverLetter: 'Generated text' },
+        responseBody: Record<string, unknown> = {
+            coverLetter: 'Generated text',
+        },
         status = 200,
     ) {
         fetchMock.mockImplementation((input: string | URL | Request) => {
@@ -428,7 +434,9 @@ describe('ApplicationEditorPage', () => {
 
             const urls = getCalledUrls();
             expect(
-                urls.some((u) => u.includes('/jobs/top-x-similar-cover-letters')),
+                urls.some((u) =>
+                    u.includes('/jobs/top-x-similar-cover-letters'),
+                ),
             ).toBe(false);
 
             await drainUploadTimer();
