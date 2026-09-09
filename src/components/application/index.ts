@@ -1,4 +1,3 @@
-export const APPLICATION_EDITOR_NAME = 'Application Editor';
-
+export { APPLICATION_EDITOR_NAME } from './constants';
 export { default as ApplicationEditorHeader } from './ApplicationEditorHeader.vue';
 export { default as ApplicationEditorMenu } from './ApplicationEditorMenu.vue';

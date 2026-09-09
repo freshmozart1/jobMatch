@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { APPLICATION_EDITOR_NAME } from '../src/components/application/constants';
 
 const mockJob = {
     sourceHostname: 'example.com',
@@ -187,7 +188,7 @@ test('keeps Application Editor focus modal, restores its launcher, and reopens c
 
     const main = page.locator('.match-page');
     const editButton = page.getByRole('button', {
-        name: 'Open Application Editor',
+        name: `Open ${APPLICATION_EDITOR_NAME}`,
     });
 
     await editButton.focus();
