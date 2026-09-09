@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
-import { APPLICATION_EDITOR_NAME } from '../src/components/application/constants';
+import {
+    APPLICATION_EDITOR_DIALOG_ID,
+    APPLICATION_EDITOR_NAME,
+} from '../src/components/application/constants';
 
 const mockJob = {
     sourceHostname: 'example.com',
@@ -194,18 +197,18 @@ test('keeps Application Editor focus modal, restores its launcher, and reopens c
     await editButton.focus();
     await page.keyboard.press('Enter');
 
-    const dialog = page.locator('#application-editor-dialog');
+    const dialog = page.locator(`#${APPLICATION_EDITOR_DIALOG_ID}`);
     const editor = dialog.locator('.editor');
     const heading = dialog.getByRole('heading', {
         level: 1,
-        name: 'Application Editor',
+        name: APPLICATION_EDITOR_NAME,
     });
     const backButton = dialog.getByRole('button', { name: 'Back' });
     const actionRows = dialog.locator('.cl-action__row');
 
     await expect(editor).toBeVisible();
     await expect(dialog).toHaveRole('dialog');
-    await expect(dialog).toHaveAccessibleName('Application Editor');
+    await expect(dialog).toHaveAccessibleName(APPLICATION_EDITOR_NAME);
     await expect(heading).toBeFocused();
     await expect(main).toHaveAttribute('inert', '');
     await expect(editButton).toHaveAttribute('aria-expanded', 'true');

@@ -6,6 +6,10 @@ import {
     JobCardStack,
     MatchFilterBar,
 } from '@/components';
+import {
+    APPLICATION_EDITOR_DIALOG_ID,
+    APPLICATION_EDITOR_DIALOG_TITLE_ID,
+} from '@/components/application';
 import ApplicationEditorPage from './ApplicationEditorPage.vue';
 import MatchEmpty from './MatchEmpty.vue';
 import ScrapeProgressStatus from './ScrapeProgressStatus.vue';
@@ -550,11 +554,11 @@ watch(searchOpen, (open) => {
     </main>
 
     <div
-        id="application-editor-dialog"
+        :id="APPLICATION_EDITOR_DIALOG_ID"
         ref="applicationEditorDialogRef"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="application-editor-dialog-title"
+        :aria-labelledby="APPLICATION_EDITOR_DIALOG_TITLE_ID"
         :class="['overlay', { 'overlay--open': applicationEditorOpen }]"
         @transitionend.self="finishClosingApplicationEditor"
     >

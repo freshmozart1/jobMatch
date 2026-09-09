@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { COVER_LETTER_NAME } from '@/components/application/constants';
 import CoverLetterAction from '@/components/coverLetter/CoverLetterAction.vue';
 
 describe('CoverLetterAction', () => {
+    it('renders the shared cover letter name', () => {
+        const wrapper = mount(CoverLetterAction, { props: { done: false } });
+
+        expect(wrapper.find('.cl-action__title').text()).toBe(
+            COVER_LETTER_NAME,
+        );
+    });
+
     describe('conditional text (done prop)', () => {
         it('shows "Write a tailored note" when not done', () => {
             const wrapper = mount(CoverLetterAction, {

@@ -7,6 +7,7 @@ import {
     APPLICATION_EDITOR_NAME,
     ApplicationEditorHeader,
     ApplicationEditorMenu,
+    COVER_LETTER_NAME,
 } from '@/components/application';
 
 const props = defineProps<{ job: ScrapedJob }>();
@@ -379,7 +380,7 @@ const statusLabel = computed(() => {
     <div class="editor">
         <ApplicationEditorHeader
             :title="
-                view === 'letter' ? 'Cover Letter' : APPLICATION_EDITOR_NAME
+                view === 'letter' ? COVER_LETTER_NAME : APPLICATION_EDITOR_NAME
             "
             @back="handleBack"
         />

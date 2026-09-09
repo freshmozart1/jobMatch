@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { APPLICATION_EDITOR_NAME } from '@/components/application';
+import {
+    APPLICATION_EDITOR_DIALOG_ID,
+    APPLICATION_EDITOR_NAME,
+} from '@/components/application';
 
 withDefaults(
     defineProps<{
@@ -45,7 +48,7 @@ function openApplicationEditor(event: MouseEvent): void {
             class="like-container__button like-container__button--edit"
             :aria-label="`Open ${APPLICATION_EDITOR_NAME}`"
             aria-haspopup="dialog"
-            aria-controls="application-editor-dialog"
+            :aria-controls="APPLICATION_EDITOR_DIALOG_ID"
             :aria-expanded="applicationEditorOpen"
             @click="openApplicationEditor"
         >

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { COVER_LETTER_NAME } from '@/components/application/constants';
+
 defineProps<{ done: boolean }>();
 defineEmits<{ click: []; download: [] }>();
 </script>
@@ -15,7 +17,7 @@ defineEmits<{ click: []; download: [] }>();
                 </svg>
             </span>
             <span class="cl-action__text">
-                <span class="cl-action__title">Cover Letter</span>
+                <span class="cl-action__title">{{ COVER_LETTER_NAME }}</span>
                 <span class="cl-action__sub">{{
                     done ? 'Draft written' : 'Write a tailored note'
                 }}</span>
