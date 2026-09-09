@@ -1,20 +1,29 @@
 <script setup lang="ts">
-import { APPLICATION_EDITOR_DIALOG_TITLE_ID } from './constants';
+import {
+    APPLICATION_EDITOR_DIALOG_TITLE_ID,
+    APPLICATION_EDITOR_HEADER_BACK_CLASS,
+    APPLICATION_EDITOR_HEADER_CLASS,
+    APPLICATION_EDITOR_HEADER_TITLE_CLASS,
+} from './constants';
 
 defineProps<{ title: string }>();
 defineEmits<{ back: [] }>();
 </script>
 
 <template>
-    <header class="cl-header">
+    <header :class="APPLICATION_EDITOR_HEADER_CLASS">
         <h1
             :id="APPLICATION_EDITOR_DIALOG_TITLE_ID"
-            class="cl-header__title"
+            :class="APPLICATION_EDITOR_HEADER_TITLE_CLASS"
             tabindex="-1"
         >
             {{ title }}
         </h1>
-        <button type="button" class="cl-header__back" @click="$emit('back')">
+        <button
+            type="button"
+            :class="APPLICATION_EDITOR_HEADER_BACK_CLASS"
+            @click="$emit('back')"
+        >
             <svg
                 width="11"
                 height="18"
@@ -36,7 +45,7 @@ defineEmits<{ back: [] }>();
 </template>
 
 <style scoped>
-.cl-header {
+.app-editor-header {
     position: relative;
     flex: 0 0 auto;
     display: flex;
@@ -48,7 +57,7 @@ defineEmits<{ back: [] }>();
     background: var(--background-color);
 }
 
-.cl-header__back {
+.app-editor-header__back {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -64,7 +73,7 @@ defineEmits<{ back: [] }>();
     -webkit-tap-highlight-color: transparent;
 }
 
-.cl-header__title {
+.app-editor-header__title {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);

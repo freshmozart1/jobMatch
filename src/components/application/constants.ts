@@ -1,4 +1,7 @@
 export const APPLICATION_EDITOR_NAME = 'Application Editor';
 export const APPLICATION_EDITOR_DIALOG_ID = 'application-editor-dialog';
 export const APPLICATION_EDITOR_DIALOG_TITLE_ID = `${APPLICATION_EDITOR_DIALOG_ID}-title`;
+export const APPLICATION_EDITOR_HEADER_CLASS = 'app-editor-header';
+export const APPLICATION_EDITOR_HEADER_TITLE_CLASS = `${APPLICATION_EDITOR_HEADER_CLASS}__title`;
+export const APPLICATION_EDITOR_HEADER_BACK_CLASS = `${APPLICATION_EDITOR_HEADER_CLASS}__back`;
 export const COVER_LETTER_NAME = 'Cover Letter';

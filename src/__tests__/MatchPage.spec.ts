@@ -5,6 +5,8 @@ import { JobCardContainer, LikeContainer } from '@/components';
 import {
     APPLICATION_EDITOR_DIALOG_ID,
     APPLICATION_EDITOR_DIALOG_TITLE_ID,
+    APPLICATION_EDITOR_HEADER_BACK_CLASS,
+    APPLICATION_EDITOR_HEADER_TITLE_CLASS,
     APPLICATION_EDITOR_NAME,
 } from '@/components/application';
 import MatchPage from '@/pages/match/MatchPage.vue';
@@ -645,9 +647,9 @@ describe('MatchPage', () => {
         await wrapper.find('.like-container__button--edit').trigger('click');
 
         expect(overlay().classes()).toContain('overlay--open');
-        expect(overlay().find('.cl-header__title').text()).toBe(
-            APPLICATION_EDITOR_NAME,
-        );
+        expect(
+            overlay().find(`.${APPLICATION_EDITOR_HEADER_TITLE_CLASS}`).text(),
+        ).toBe(APPLICATION_EDITOR_NAME);
     });
 
     it('provides full modal keyboard and focus behavior for the Application Editor', async () => {
@@ -672,7 +674,9 @@ describe('MatchPage', () => {
             expect(main.attributes('inert')).toBeDefined();
             expect(editButton.attributes('aria-expanded')).toBe('true');
 
-            const backButton = dialog.find('.cl-header__back');
+            const backButton = dialog.find(
+                `.${APPLICATION_EDITOR_HEADER_BACK_CLASS}`,
+            );
             const actionRows = dialog.findAll('.cl-action__row');
             const lastAction = actionRows[actionRows.length - 1]!;
 
@@ -812,7 +816,9 @@ describe('MatchPage', () => {
         await wrapper.find('.like-container__button--edit').trigger('click');
         const firstEditor = overlay().find('.editor').element;
 
-        await overlay().find('.cl-header__back').trigger('click');
+        await overlay()
+            .find(`.${APPLICATION_EDITOR_HEADER_BACK_CLASS}`)
+            .trigger('click');
 
         expect(overlay().classes()).not.toContain('overlay--open');
         expect(overlay().find('.editor').exists()).toBe(true);
@@ -834,9 +840,9 @@ describe('MatchPage', () => {
 
         expect(overlay().find('.editor').exists()).toBe(true);
         expect(overlay().find('.editor').element).not.toBe(firstEditor);
-        expect(overlay().find('.cl-header__title').text()).toBe(
-            APPLICATION_EDITOR_NAME,
-        );
+        expect(
+            overlay().find(`.${APPLICATION_EDITOR_HEADER_TITLE_CLASS}`).text(),
+        ).toBe(APPLICATION_EDITOR_NAME);
     });
 
     it('does not unmount the Application Editor when it reopens during the fly-out', async () => {
@@ -844,7 +850,9 @@ describe('MatchPage', () => {
         const overlay = () => wrapper.findAll('.overlay')[0]!;
 
         await wrapper.find('.like-container__button--edit').trigger('click');
-        await overlay().find('.cl-header__back').trigger('click');
+        await overlay()
+            .find(`.${APPLICATION_EDITOR_HEADER_BACK_CLASS}`)
+            .trigger('click');
         await wrapper.find('.like-container__button--edit').trigger('click');
         await overlay().trigger('transitionend', {
             propertyName: 'visibility',
