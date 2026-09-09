@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.0
+
+### Added
+
+- Selecting non-empty text in the cover-letter editor now opens an inline AI
+  revision card. An instruction is sent with the exact selected range, complete
+  draft, and job context to jobMatchServer v5.1.0; the returned passage replaces
+  only that range and then follows the existing local draft and autosave flow
+  (closes #45).
+
+### Fixed
+
+- The Like and Dislike buttons now use the same rating, persistence, and deck
+  advancement path as swipe gestures (#81).
+
+### Internal
+
+- Centralized the Application Editor name and stable header class constants so
+  its components and accessibility tests share one contract (#79, #80).
+
 ## v0.4.0
 
 ### Added

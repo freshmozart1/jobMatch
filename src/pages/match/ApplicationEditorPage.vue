@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
 import { CoverLetterEditor } from '@/components/coverLetter';
+import type { CoverLetterRevisionSelection } from '@/components/coverLetter';
 import {
     APPLICATION_EDITOR_NAME,
     ApplicationEditorHeader,
@@ -18,6 +19,20 @@ const storageKey = computed(
 );
 const text = ref('');
 const view = ref<'menu' | 'letter'>('menu');
+const revising = ref(false);
+const revisionError = ref<string | null>(null);
+let revisionAbortController: AbortController | null = null;
+
+function resetRevision() {
+    revisionError.value = null;
+}
+
+function abortRevision() {
+    revisionAbortController?.abort();
+    revisionAbortController = null;
+    revising.value = false;
+    resetRevision();
+}
 
 const cvUploaded = ref(false);
 
@@ -106,6 +121,7 @@ const prevJob = ref<ScrapedJob>(props.job);
 watch(
     () => props.job.duplicateKey,
     async (newKey, oldKey) => {
+        abortRevision();
         const jobToFlush = prevJob.value;
         if (oldKey && uploadTimer !== null) {
             void uploadNow(oldKey, text.value, jobToFlush);
@@ -235,6 +251,7 @@ function onChange(v: string) {
 
 function handleBack() {
     if (view.value === 'letter') {
+        abortRevision();
         view.value = 'menu';
     } else {
         void uploadNow();
@@ -324,12 +341,14 @@ onBeforeUnmount(() => {
     applicationDownload.abort();
     coverLetterDownload.abort();
     cvDownload.abort();
+    abortRevision();
 });
 
 const generating = ref(false);
 
 async function generateCoverLetter() {
-    if (generating.value) return;
+    if (generating.value || revising.value) return;
+    resetRevision();
     generating.value = true;
     const keyAtStart = props.job.duplicateKey;
     // The endpoint never used the embedding — strip it from the request body.
@@ -349,6 +368,76 @@ async function generateCoverLetter() {
         );
     } finally {
         generating.value = false;
+    }
+}
+
+async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
+    if (revising.value) return;
+
+    const draftAtStart = text.value;
+    if (
+        draftAtStart.slice(selection.start, selection.end) !==
+        selection.selectedText
+    ) {
+        revisionError.value =
+            'The selection changed. Select the passage again and retry.';
+        return;
+    }
+
+    const keyAtStart = props.job.duplicateKey;
+    const controller = new AbortController();
+    revisionAbortController = controller;
+    revising.value = true;
+    resetRevision();
+
+    try {
+        const { replacementText } = await postJson<{
+            replacementText: string;
+        }>(
+            '/cover-letters/revise/text',
+            {
+                selectedText: selection.selectedText,
+                instruction: selection.instruction,
+                coverLetterText: draftAtStart,
+                job: {
+                    title: props.job.title,
+                    company: props.job.company,
+                    location: props.job.location,
+                    description: props.job.descriptionText,
+                },
+            },
+            controller.signal,
+        );
+        if (
+            keyAtStart !== props.job.duplicateKey ||
+            text.value !== draftAtStart
+        ) {
+            return;
+        }
+        if (
+            typeof replacementText !== 'string' ||
+            replacementText.trim().length === 0
+        ) {
+            throw new Error('The server returned an invalid replacement.');
+        }
+
+        onChange(
+            draftAtStart.slice(0, selection.start) +
+                replacementText +
+                draftAtStart.slice(selection.end),
+        );
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        revisionError.value = 'Could not revise this text. Please try again.';
+        console.error(
+            'Failed to revise cover letter selection:',
+            error instanceof Error ? error.message : String(error),
+        );
+    } finally {
+        if (revisionAbortController === controller) {
+            revisionAbortController = null;
+            revising.value = false;
+        }
     }
 }
 
@@ -405,8 +494,12 @@ const statusLabel = computed(() => {
             :status-label="statusLabel"
             :words="words"
             :generating="generating"
+            :revising="revising"
+            :revision-error="revisionError"
             @input="onChange"
             @generate="generateCoverLetter"
+            @revise="reviseCoverLetter"
+            @reset-revision="resetRevision"
         />
     </div>
 </template>

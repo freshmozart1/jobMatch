@@ -28,7 +28,14 @@ const baseJob: ScrapedJob = {
 
 function mountEditor(
     jobOverrides: Partial<ScrapedJob> = {},
-    extra: { text?: string; statusLabel?: string; words?: number } = {},
+    extra: {
+        text?: string;
+        statusLabel?: string;
+        words?: number;
+        generating?: boolean;
+        revising?: boolean;
+        revisionError?: string | null;
+    } = {},
 ) {
     return mount(CoverLetterEditor, {
         props: {
@@ -36,6 +43,9 @@ function mountEditor(
             text: extra.text ?? '',
             statusLabel: extra.statusLabel ?? 'Draft auto-saves as you type',
             words: extra.words ?? 0,
+            generating: extra.generating ?? false,
+            revising: extra.revising ?? false,
+            revisionError: extra.revisionError ?? null,
         },
     });
 }
@@ -135,6 +145,109 @@ describe('CoverLetterEditor', () => {
             await wrapper.find('.cl-textarea').setValue('Hello');
             expect(wrapper.emitted('input')).toBeTruthy();
             expect(wrapper.emitted('input')![0]).toEqual(['Hello']);
+        });
+    });
+
+    describe('AI-assisted selection revision', () => {
+        async function selectText(
+            wrapper: ReturnType<typeof mountEditor>,
+            start: number,
+            end: number,
+        ) {
+            const textarea = wrapper.find('.cl-textarea');
+            (textarea.element as HTMLTextAreaElement).setSelectionRange(
+                start,
+                end,
+            );
+            await textarea.trigger('select');
+        }
+
+        it('opens a labelled inline dialog for a non-empty selection and emits the exact range and instruction', async () => {
+            const wrapper = mountEditor(
+                {},
+                { text: 'Hello selected world' },
+            );
+            await selectText(wrapper, 6, 14);
+
+            const dialog = wrapper.find('.cl-revision');
+            expect(dialog.attributes('role')).toBe('dialog');
+            expect(dialog.attributes('aria-labelledby')).toBe(
+                'cl-revision-title',
+            );
+            const apply = wrapper.find('.cl-revision__apply');
+            expect((apply.element as HTMLButtonElement).disabled).toBe(true);
+
+            await wrapper
+                .find('.cl-revision__instruction')
+                .setValue('Make it more confident.');
+            await apply.trigger('submit');
+
+            expect(wrapper.emitted('revise')?.[0]).toEqual([
+                {
+                    selectedText: 'selected',
+                    start: 6,
+                    end: 14,
+                    instruction: 'Make it more confident.',
+                },
+            ]);
+        });
+
+        it('does not open for a collapsed or whitespace-only selection', async () => {
+            const wrapper = mountEditor({}, { text: 'Hello   world' });
+            await selectText(wrapper, 5, 5);
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
+            await selectText(wrapper, 5, 8);
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
+        });
+
+        it('closes and resets on Cancel or Escape', async () => {
+            const wrapper = mountEditor({}, { text: 'Hello world' });
+            await selectText(wrapper, 0, 5);
+            await wrapper.find('.cl-revision__cancel').trigger('click');
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
+            expect(wrapper.emitted('resetRevision')).toBeTruthy();
+
+            await selectText(wrapper, 6, 11);
+            await wrapper.find('.cl-textarea').trigger('keydown', {
+                key: 'Escape',
+            });
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
+        });
+
+        it('locks the draft and controls while revising and displays a retryable error', async () => {
+            const wrapper = mountEditor(
+                {},
+                {
+                    text: 'Hello world',
+                    revisionError: 'Could not revise this text. Please try again.',
+                },
+            );
+            await selectText(wrapper, 6, 11);
+            await wrapper
+                .find('.cl-revision__instruction')
+                .setValue('Make it warmer.');
+            await wrapper.setProps({ revising: true });
+
+            expect(
+                (wrapper.find('.cl-textarea').element as HTMLTextAreaElement)
+                    .disabled,
+            ).toBe(true);
+            expect(
+                (
+                    wrapper.find('.cl-revision__instruction')
+                        .element as HTMLInputElement
+                ).disabled,
+            ).toBe(true);
+            expect(wrapper.find('.cl-revision__error').attributes('role')).toBe(
+                'alert',
+            );
+            expect(wrapper.find('.cl-revision__error').text()).toContain(
+                'Could not revise',
+            );
+            expect(
+                (wrapper.find('.cl-generate').element as HTMLButtonElement)
+                    .disabled,
+            ).toBe(true);
         });
     });
 });

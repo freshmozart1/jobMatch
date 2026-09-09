@@ -60,8 +60,10 @@ to be running for jobMatch to do anything. See
   cover letter action, a CV attachment and the application download; the cover
   letter editor is a second view opened from the menu's cover letter row.
 - **Cover letter** — generate one tailored to the job with one tap
-  (`POST /cover-letters/create/text`), then edit it by hand with the job it
-  belongs to kept in view (the menu shows no job; the letter view does). Drafts
+  (`POST /cover-letters/create/text`), edit it by hand, or select a passage and
+  ask AI to revise it through jobMatchServer v5.1.0
+  (`POST /cover-letters/revise/text`), with the job it belongs to kept in view
+  (the menu shows no job; the letter view does). Drafts
   save to `localStorage` immediately and upload to the server after a 3s typing
   pause (`POST /cover-letters/upload/text`) — and also when you leave the
   editor, swipe to another card, or the page unmounts. Both live in
