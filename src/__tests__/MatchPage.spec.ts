@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
 import { JobCardContainer, LikeContainer } from '@/components';
+import {
+    APPLICATION_EDITOR_DIALOG_ID,
+    APPLICATION_EDITOR_DIALOG_TITLE_ID,
+    APPLICATION_EDITOR_NAME,
+} from '@/components/application';
 import MatchPage from '@/pages/match/MatchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 import type { ScrapeStreamFrame } from '@/pages/match/scrapeStream';
@@ -641,25 +646,27 @@ describe('MatchPage', () => {
 
         expect(overlay().classes()).toContain('overlay--open');
         expect(overlay().find('.cl-header__title').text()).toBe(
-            'Application Editor',
+            APPLICATION_EDITOR_NAME,
         );
     });
 
     it('provides full modal keyboard and focus behavior for the Application Editor', async () => {
         const wrapper = await mountLoadedMatchPageAttached();
         const main = wrapper.find('.match-page');
-        const dialog = wrapper.find('#application-editor-dialog');
+        const dialog = wrapper.find(`#${APPLICATION_EDITOR_DIALOG_ID}`);
         const editButton = wrapper.find('.like-container__button--edit');
 
         try {
             (editButton.element as HTMLButtonElement).focus();
             await editButton.trigger('click');
 
-            const heading = dialog.find('#application-editor-dialog-title');
+            const heading = dialog.find(
+                `#${APPLICATION_EDITOR_DIALOG_TITLE_ID}`,
+            );
             expect(dialog.attributes('role')).toBe('dialog');
             expect(dialog.attributes('aria-modal')).toBe('true');
             expect(dialog.attributes('aria-labelledby')).toBe(
-                'application-editor-dialog-title',
+                APPLICATION_EDITOR_DIALOG_TITLE_ID,
             );
             expect(document.activeElement).toBe(heading.element);
             expect(main.attributes('inert')).toBeDefined();
@@ -794,7 +801,7 @@ describe('MatchPage', () => {
             'overlay--open',
         );
         expect(
-            wrapper.find('#application-editor-dialog .editor').exists(),
+            wrapper.find(`#${APPLICATION_EDITOR_DIALOG_ID} .editor`).exists(),
         ).toBe(false);
     });
 
@@ -828,7 +835,7 @@ describe('MatchPage', () => {
         expect(overlay().find('.editor').exists()).toBe(true);
         expect(overlay().find('.editor').element).not.toBe(firstEditor);
         expect(overlay().find('.cl-header__title').text()).toBe(
-            'Application Editor',
+            APPLICATION_EDITOR_NAME,
         );
     });
 

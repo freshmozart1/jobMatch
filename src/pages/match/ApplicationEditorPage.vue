@@ -4,8 +4,10 @@ import type { ScrapedJob } from '@/components/jobCard/types';
 import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
 import { CoverLetterEditor } from '@/components/coverLetter';
 import {
+    APPLICATION_EDITOR_NAME,
     ApplicationEditorHeader,
     ApplicationEditorMenu,
+    COVER_LETTER_NAME,
 } from '@/components/application';
 
 const props = defineProps<{ job: ScrapedJob }>();
@@ -377,7 +379,9 @@ const statusLabel = computed(() => {
 <template>
     <div class="editor">
         <ApplicationEditorHeader
-            :title="view === 'letter' ? 'Cover Letter' : 'Application Editor'"
+            :title="
+                view === 'letter' ? COVER_LETTER_NAME : APPLICATION_EDITOR_NAME
+            "
             @back="handleBack"
         />
 

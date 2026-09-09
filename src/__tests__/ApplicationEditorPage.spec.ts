@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
+import {
+    APPLICATION_EDITOR_DIALOG_TITLE_ID,
+    APPLICATION_EDITOR_NAME,
+    COVER_LETTER_NAME,
+} from '@/components/application';
 import ApplicationEditorPage from '@/pages/match/ApplicationEditorPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 
@@ -147,10 +152,10 @@ describe('ApplicationEditorPage', () => {
     it('mounts in the menu view with "Application Editor" header', () => {
         const wrapper = mount(ApplicationEditorPage, { props: { job } });
         const heading = wrapper.find('.cl-header__title');
-        expect(heading.text()).toBe('Application Editor');
+        expect(heading.text()).toBe(APPLICATION_EDITOR_NAME);
         expect(heading.element.tagName).toBe('H1');
         expect(heading.attributes('id')).toBe(
-            'application-editor-dialog-title',
+            APPLICATION_EDITOR_DIALOG_TITLE_ID,
         );
         expect(heading.attributes('tabindex')).toBe('-1');
         expect(wrapper.find('.cl-menu').exists()).toBe(true);
@@ -158,7 +163,9 @@ describe('ApplicationEditorPage', () => {
 
     it('navigates to the letter view when "Cover Letter" is clicked', async () => {
         const wrapper = await mountAndOpen();
-        expect(wrapper.find('.cl-header__title').text()).toBe('Cover Letter');
+        expect(wrapper.find('.cl-header__title').text()).toBe(
+            COVER_LETTER_NAME,
+        );
         expect(wrapper.find('.cl-textarea').exists()).toBe(true);
     });
 

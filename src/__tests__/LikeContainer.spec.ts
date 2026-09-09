@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 
 import { LikeContainer } from '@/components';
+import {
+    APPLICATION_EDITOR_DIALOG_ID,
+    APPLICATION_EDITOR_NAME,
+} from '@/components/application';
 
 describe('LikeContainer', () => {
     it('renders a dislike, edit, and like control', () => {
@@ -24,7 +28,11 @@ describe('LikeContainer', () => {
         const labels = wrapper
             .findAll('.like-container__button')
             .map((button) => button.attributes('aria-label'));
-        expect(labels).toEqual(['Dislike', 'Open application editor', 'Like']);
+        expect(labels).toEqual([
+            'Dislike',
+            `Open ${APPLICATION_EDITOR_NAME}`,
+            'Like',
+        ]);
     });
 
     it('identifies the edit control as a collapsed dialog launcher by default', () => {
@@ -33,7 +41,7 @@ describe('LikeContainer', () => {
 
         expect(editButton.attributes('aria-haspopup')).toBe('dialog');
         expect(editButton.attributes('aria-controls')).toBe(
-            'application-editor-dialog',
+            APPLICATION_EDITOR_DIALOG_ID,
         );
         expect(editButton.attributes('aria-expanded')).toBe('false');
     });

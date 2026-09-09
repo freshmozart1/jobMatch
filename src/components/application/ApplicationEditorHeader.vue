@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { APPLICATION_EDITOR_DIALOG_TITLE_ID } from './constants';
+
 defineProps<{ title: string }>();
 defineEmits<{ back: [] }>();
 </script>
@@ -6,7 +8,7 @@ defineEmits<{ back: [] }>();
 <template>
     <header class="cl-header">
         <h1
-            id="application-editor-dialog-title"
+            :id="APPLICATION_EDITOR_DIALOG_TITLE_ID"
             class="cl-header__title"
             tabindex="-1"
         >
