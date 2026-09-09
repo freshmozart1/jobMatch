@@ -495,6 +495,224 @@ describe('ApplicationEditorPage', () => {
         });
     });
 
+    // --- revise selected cover-letter text ---
+
+    async function submitRevision(
+        wrapper: ReturnType<typeof mount>,
+        start: number,
+        end: number,
+        instruction: string,
+    ) {
+        const textarea = wrapper.find('.cl-textarea');
+        (textarea.element as HTMLTextAreaElement).setSelectionRange(start, end);
+        await textarea.trigger('select');
+        await wrapper
+            .find('.cl-revision__instruction')
+            .setValue(instruction);
+        await wrapper.find('.cl-revision').trigger('submit');
+    }
+
+    describe('revise selected cover-letter text', () => {
+        it('sends the exact context, replaces only the captured range, and schedules autosave', async () => {
+            const draft = 'Repeated sentence. Repeated sentence.';
+            const selectedText = 'Repeated sentence.';
+            const start = draft.lastIndexOf(selectedText);
+            const replacementText = 'Confident tailored sentence.';
+            fetchMock.mockImplementation((input: string | URL | Request) => {
+                const url = input as string;
+                if (url.includes('/cover-letters/revise/text')) {
+                    return Promise.resolve(
+                        new Response(JSON.stringify({ replacementText }), {
+                            status: 200,
+                        }),
+                    );
+                }
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            });
+            const wrapper = await mountAndOpen(draft);
+            fetchMock.mockClear();
+
+            await submitRevision(
+                wrapper,
+                start,
+                start + selectedText.length,
+                'Make it more specific and confident.',
+            );
+            await flushPromises();
+
+            const revisionCall = fetchMock.mock.calls.find((call) =>
+                (call[0] as string).includes('/cover-letters/revise/text'),
+            );
+            expect(revisionCall).toBeDefined();
+            expect(JSON.parse((revisionCall![1] as RequestInit).body as string)).toEqual(
+                {
+                    selectedText,
+                    instruction: 'Make it more specific and confident.',
+                    coverLetterText: draft,
+                    job: {
+                        title: job.title,
+                        company: job.company,
+                        location: job.location,
+                        description: job.descriptionText,
+                    },
+                },
+            );
+
+            const updatedDraft =
+                draft.slice(0, start) +
+                replacementText +
+                draft.slice(start + selectedText.length);
+            expect(
+                (wrapper.find('.cl-textarea').element as HTMLTextAreaElement)
+                    .value,
+            ).toBe(updatedDraft);
+            expect(
+                window.localStorage.getItem(
+                    'jobmatch.coverletter.linkedin:1001',
+                ),
+            ).toBe(updatedDraft);
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
+
+            await vi.runAllTimersAsync();
+            await flushPromises();
+            const uploadCall = fetchMock.mock.calls.find((call) =>
+                (call[0] as string).includes('/cover-letters/upload/text'),
+            );
+            expect(uploadCall).toBeDefined();
+            expect(
+                JSON.parse((uploadCall![1] as RequestInit).body as string),
+            ).toEqual({
+                coverLetterText: updatedDraft,
+                jobDuplicateKey: job.duplicateKey,
+            });
+        });
+
+        it('keeps the draft, selection card, and instruction available after failure', async () => {
+            const consoleError = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
+            const draft = 'A draft sentence.';
+            fetchMock.mockImplementation((input: string | URL | Request) => {
+                const url = input as string;
+                if (url.includes('/cover-letters/revise/text')) {
+                    return Promise.resolve(
+                        new Response(
+                            JSON.stringify({ message: 'Provider failed' }),
+                            { status: 500 },
+                        ),
+                    );
+                }
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            });
+            const wrapper = await mountAndOpen(draft);
+
+            await submitRevision(
+                wrapper,
+                2,
+                draft.length,
+                'Make it clearer.',
+            );
+            await flushPromises();
+
+            expect(
+                (wrapper.find('.cl-textarea').element as HTMLTextAreaElement)
+                    .value,
+            ).toBe(draft);
+            expect(wrapper.find('.cl-revision').exists()).toBe(true);
+            expect(wrapper.find('.cl-revision__error').text()).toBe(
+                'Could not revise this text. Please try again.',
+            );
+            expect(
+                (
+                    wrapper.find('.cl-revision__instruction')
+                        .element as HTMLInputElement
+                ).value,
+            ).toBe('Make it clearer.');
+            expect(consoleError).toHaveBeenCalledWith(
+                'Failed to revise cover letter selection:',
+                'Provider failed',
+            );
+            consoleError.mockRestore();
+        });
+
+        it('locks the editor and prevents duplicate revision requests while pending', async () => {
+            let resolveRevision!: (response: Response) => void;
+            const pendingRevision = new Promise<Response>((resolve) => {
+                resolveRevision = resolve;
+            });
+            fetchMock.mockImplementation((input: string | URL | Request) => {
+                const url = input as string;
+                if (url.includes('/cover-letters/revise/text')) {
+                    return pendingRevision;
+                }
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            });
+            const draft = 'Pending revision';
+            const wrapper = await mountAndOpen(draft);
+
+            await submitRevision(wrapper, 0, draft.length, 'Improve this.');
+            await wrapper.find('.cl-revision').trigger('submit');
+
+            const calls = fetchMock.mock.calls.filter((call) =>
+                (call[0] as string).includes('/cover-letters/revise/text'),
+            );
+            expect(calls).toHaveLength(1);
+            expect(
+                (wrapper.find('.cl-textarea').element as HTMLTextAreaElement)
+                    .disabled,
+            ).toBe(true);
+            expect(
+                (wrapper.find('.cl-generate').element as HTMLButtonElement)
+                    .disabled,
+            ).toBe(true);
+
+            resolveRevision(
+                new Response(
+                    JSON.stringify({ replacementText: 'Improved revision' }),
+                    { status: 200 },
+                ),
+            );
+            await flushPromises();
+            await vi.runAllTimersAsync();
+            await flushPromises();
+        });
+
+        it('aborts an in-flight revision when the active job changes', async () => {
+            let capturedSignal: AbortSignal | undefined;
+            fetchMock.mockImplementation(
+                (input: string | URL | Request, init?: RequestInit) => {
+                    const url = input as string;
+                    if (url.includes('/cover-letters/revise/text')) {
+                        capturedSignal = init?.signal ?? undefined;
+                        return new Promise<Response>((_resolve, reject) => {
+                            capturedSignal?.addEventListener('abort', () => {
+                                reject(
+                                    new DOMException(
+                                        'The operation was aborted.',
+                                        'AbortError',
+                                    ),
+                                );
+                            });
+                        });
+                    }
+                    return Promise.resolve(
+                        new Response('{}', { status: 200 }),
+                    );
+                },
+            );
+            const draft = 'Switching jobs';
+            const wrapper = await mountAndOpen(draft);
+
+            await submitRevision(wrapper, 0, draft.length, 'Improve this.');
+            expect(capturedSignal?.aborted).toBe(false);
+            await wrapper.setProps({ job: job2 });
+            await flushPromises();
+
+            expect(capturedSignal?.aborted).toBe(true);
+            expect(wrapper.find('.cl-revision__error').exists()).toBe(false);
+        });
+    });
+
     // --- CV upload ---
 
     async function selectCvFile(wrapper: ReturnType<typeof mount>, file: File) {

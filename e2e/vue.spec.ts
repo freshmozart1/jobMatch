@@ -283,3 +283,85 @@ test('keeps Application Editor focus modal, restores its launcher, and reopens c
     await expect(editor).toBeVisible();
     await expect(heading).toBeFocused();
 });
+
+test('revises the exact selected cover-letter range through the released server contract', async ({
+    page,
+}) => {
+    const draft = 'Repeated sentence. Repeated sentence.';
+    const selectedText = 'Repeated sentence.';
+    const replacementText = 'Confident tailored sentence.';
+    const instruction = 'Make it more specific and confident.';
+
+    await page.route('**/cover-letters/revise/text', async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ replacementText }),
+        });
+    });
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/cover-letters/upload/text', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    await page.evaluate(
+        ({ key, value }) => window.localStorage.setItem(key, value),
+        {
+            key: `jobmatch.coverletter.${mockJob.duplicateKey}`,
+            value: draft,
+        },
+    );
+
+    await page
+        .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+        .click();
+    await page.locator('.cl-action__row').first().click();
+
+    const textarea = page.locator('.cl-textarea');
+    await expect(textarea).toHaveValue(draft);
+    const start = draft.lastIndexOf(selectedText);
+    await textarea.evaluate(
+        (element, range) => {
+            const input = element as HTMLTextAreaElement;
+            input.setSelectionRange(range.start, range.end);
+            input.dispatchEvent(new Event('select', { bubbles: true }));
+        },
+        { start, end: start + selectedText.length },
+    );
+
+    const revisionCard = page.locator('.cl-revision');
+    await expect(revisionCard).toHaveRole('dialog');
+    await revisionCard.getByLabel('How should AI revise this selection?').fill(
+        instruction,
+    );
+    const revisionRequest = page.waitForRequest(
+        '**/cover-letters/revise/text',
+    );
+    await revisionCard.getByRole('button', { name: 'Apply' }).click();
+    const request = await revisionRequest;
+
+    expect(request.postDataJSON()).toEqual({
+        selectedText,
+        instruction,
+        coverLetterText: draft,
+        job: {
+            title: mockJob.title,
+            company: mockJob.company,
+            location: mockJob.location,
+            description: mockJob.descriptionText,
+        },
+    });
+    const updatedDraft =
+        draft.slice(0, start) +
+        replacementText +
+        draft.slice(start + selectedText.length);
+    await expect(textarea).toHaveValue(updatedDraft);
+    await expect(revisionCard).toHaveCount(0);
+    expect(
+        await page.evaluate((key) => window.localStorage.getItem(key),
+            `jobmatch.coverletter.${mockJob.duplicateKey}`,
+        ),
+    ).toBe(updatedDraft);
+});

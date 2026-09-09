@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import type { CoverLetterRevisionSelection } from './types';
 
 const props = withDefaults(
     defineProps<{
@@ -9,10 +10,87 @@ const props = withDefaults(
         statusLabel: string;
         words: number;
         generating?: boolean;
+        revising?: boolean;
+        revisionError?: string | null;
     }>(),
-    { generating: false },
+    { generating: false, revising: false, revisionError: null },
 );
-defineEmits<{ input: [value: string]; generate: [] }>();
+const emit = defineEmits<{
+    input: [value: string];
+    generate: [];
+    revise: [selection: CoverLetterRevisionSelection];
+    resetRevision: [];
+}>();
+
+type SelectedRange = {
+    selectedText: string;
+    start: number;
+    end: number;
+};
+
+const selectedRange = ref<SelectedRange | null>(null);
+const revisionInstruction = ref('');
+
+const canSubmitRevision = computed(
+    () =>
+        selectedRange.value !== null &&
+        revisionInstruction.value.trim().length > 0 &&
+        !props.revising,
+);
+
+function closeRevision(notifyParent = true) {
+    selectedRange.value = null;
+    revisionInstruction.value = '';
+    if (notifyParent) emit('resetRevision');
+}
+
+function captureSelection(event: Event) {
+    if (props.generating || props.revising) return;
+    const textarea = event.currentTarget as HTMLTextAreaElement;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.slice(start, end);
+    if (start === end || selectedText.trim().length === 0) {
+        closeRevision();
+        return;
+    }
+
+    if (
+        selectedRange.value?.start !== start ||
+        selectedRange.value.end !== end ||
+        selectedRange.value.selectedText !== selectedText
+    ) {
+        emit('resetRevision');
+    }
+    selectedRange.value = { selectedText, start, end };
+}
+
+function handleInput(event: Event) {
+    closeRevision();
+    emit('input', (event.target as HTMLTextAreaElement).value);
+}
+
+function submitRevision() {
+    if (!canSubmitRevision.value || selectedRange.value === null) return;
+    emit('revise', {
+        ...selectedRange.value,
+        instruction: revisionInstruction.value,
+    });
+}
+
+function generateCoverLetter() {
+    closeRevision();
+    emit('generate');
+}
+
+watch(
+    () => props.revising,
+    (revising, wasRevising) => {
+        if (wasRevising && !revising && props.revisionError === null) {
+            closeRevision(false);
+        }
+    },
+);
 
 const safeUrl = computed(() =>
     props.job.sourceUrl.startsWith('https://') ? props.job.sourceUrl : null,
@@ -88,12 +166,54 @@ function parseDescription(raw: string): Segment[] {
             <textarea
                 class="cl-textarea"
                 :value="text"
+                :disabled="revising"
                 placeholder="I am writing to express my interest in this role…"
                 :spellcheck="false"
-                @input="
-                    $emit('input', ($event.target as HTMLTextAreaElement).value)
-                "
+                @input="handleInput"
+                @select="captureSelection"
+                @keydown.esc="closeRevision()"
             />
+            <form
+                v-if="selectedRange"
+                class="cl-revision"
+                role="dialog"
+                aria-labelledby="cl-revision-title"
+                @submit.prevent="submitRevision"
+                @keydown.esc="closeRevision()"
+            >
+                <label id="cl-revision-title" for="cl-revision-instruction">
+                    How should AI revise this selection?
+                </label>
+                <input
+                    id="cl-revision-instruction"
+                    v-model="revisionInstruction"
+                    class="cl-revision__instruction"
+                    type="text"
+                    placeholder="Make it more specific and confident"
+                    :disabled="revising"
+                    @input="$emit('resetRevision')"
+                />
+                <p v-if="revisionError" class="cl-revision__error" role="alert">
+                    {{ revisionError }}
+                </p>
+                <div class="cl-revision__actions">
+                    <button
+                        type="button"
+                        class="cl-revision__cancel"
+                        :disabled="revising"
+                        @click="closeRevision()"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        class="cl-revision__apply"
+                        :disabled="!canSubmitRevision"
+                    >
+                        {{ revising ? 'Revising…' : 'Apply' }}
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -102,10 +222,10 @@ function parseDescription(raw: string): Segment[] {
         <button
             type="button"
             :class="['cl-generate', { 'cl-generate--busy': generating }]"
-            :disabled="generating"
+            :disabled="generating || revising"
             aria-label="Generate cover letter with AI"
             title="Generate with AI"
-            @click="$emit('generate')"
+            @click="generateCoverLetter"
         >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
@@ -245,6 +365,84 @@ function parseDescription(raw: string): Segment[] {
 
 .cl-textarea::placeholder {
     color: rgba(0, 0, 0, 0.3);
+}
+
+.cl-textarea:disabled {
+    color: var(--text-color);
+    cursor: progress;
+}
+
+.cl-revision {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    background: #fff7fb;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.cl-revision label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.cl-revision__instruction {
+    width: 100%;
+    min-height: 40px;
+    padding: 9px 11px;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    color: var(--text-color);
+}
+
+.cl-revision__instruction:focus {
+    border-color: var(--accents-pink);
+    outline: 2px solid color-mix(in srgb, var(--accents-pink) 25%, transparent);
+    outline-offset: 1px;
+}
+
+.cl-revision__error {
+    margin: 0;
+    font-size: 12px;
+    color: #a32342;
+}
+
+.cl-revision__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.cl-revision__actions button {
+    min-height: 36px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.cl-revision__cancel {
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    background: #fff;
+    color: var(--text-color);
+}
+
+.cl-revision__apply {
+    border: none;
+    background: var(--accents-pink);
+    color: #fff;
+}
+
+.cl-revision__actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 .cl-meta {
