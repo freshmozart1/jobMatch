@@ -180,7 +180,11 @@ function getTabbableElements(dialog: HTMLElement): HTMLElement[] {
 }
 
 function focusDialogHeading(dialog: HTMLElement | null): void {
-    dialog?.querySelector<HTMLElement>('.cl-header__title')?.focus();
+    if (!dialog) return;
+    const headingId = dialog.getAttribute('aria-labelledby');
+    if (!headingId) return;
+    const heading = dialog.ownerDocument.getElementById(headingId);
+    if (heading && dialog.contains(heading)) heading.focus();
 }
 
 async function openApplicationEditor(

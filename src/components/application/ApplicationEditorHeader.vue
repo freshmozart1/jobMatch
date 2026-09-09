@@ -6,15 +6,19 @@ defineEmits<{ back: [] }>();
 </script>
 
 <template>
-    <header class="cl-header">
+    <header class="app-editor-header">
         <h1
             :id="APPLICATION_EDITOR_DIALOG_TITLE_ID"
-            class="cl-header__title"
+            class="app-editor-header__title"
             tabindex="-1"
         >
             {{ title }}
         </h1>
-        <button type="button" class="cl-header__back" @click="$emit('back')">
+        <button
+            type="button"
+            class="app-editor-header__back"
+            @click="$emit('back')"
+        >
             <svg
                 width="11"
                 height="18"
@@ -36,7 +40,7 @@ defineEmits<{ back: [] }>();
 </template>
 
 <style scoped>
-.cl-header {
+.app-editor-header {
     position: relative;
     flex: 0 0 auto;
     display: flex;
@@ -48,7 +52,7 @@ defineEmits<{ back: [] }>();
     background: var(--background-color);
 }
 
-.cl-header__back {
+.app-editor-header__back {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -64,7 +68,7 @@ defineEmits<{ back: [] }>();
     -webkit-tap-highlight-color: transparent;
 }
 
-.cl-header__title {
+.app-editor-header__title {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);

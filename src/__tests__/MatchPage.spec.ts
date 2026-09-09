@@ -645,7 +645,7 @@ describe('MatchPage', () => {
         await wrapper.find('.like-container__button--edit').trigger('click');
 
         expect(overlay().classes()).toContain('overlay--open');
-        expect(overlay().find('.cl-header__title').text()).toBe(
+        expect(overlay().find('.app-editor-header__title').text()).toBe(
             APPLICATION_EDITOR_NAME,
         );
     });
@@ -672,7 +672,7 @@ describe('MatchPage', () => {
             expect(main.attributes('inert')).toBeDefined();
             expect(editButton.attributes('aria-expanded')).toBe('true');
 
-            const backButton = dialog.find('.cl-header__back');
+            const backButton = dialog.find('.app-editor-header__back');
             const actionRows = dialog.findAll('.cl-action__row');
             const lastAction = actionRows[actionRows.length - 1]!;
 
@@ -812,7 +812,7 @@ describe('MatchPage', () => {
         await wrapper.find('.like-container__button--edit').trigger('click');
         const firstEditor = overlay().find('.editor').element;
 
-        await overlay().find('.cl-header__back').trigger('click');
+        await overlay().find('.app-editor-header__back').trigger('click');
 
         expect(overlay().classes()).not.toContain('overlay--open');
         expect(overlay().find('.editor').exists()).toBe(true);
@@ -834,7 +834,7 @@ describe('MatchPage', () => {
 
         expect(overlay().find('.editor').exists()).toBe(true);
         expect(overlay().find('.editor').element).not.toBe(firstEditor);
-        expect(overlay().find('.cl-header__title').text()).toBe(
+        expect(overlay().find('.app-editor-header__title').text()).toBe(
             APPLICATION_EDITOR_NAME,
         );
     });
@@ -844,7 +844,7 @@ describe('MatchPage', () => {
         const overlay = () => wrapper.findAll('.overlay')[0]!;
 
         await wrapper.find('.like-container__button--edit').trigger('click');
-        await overlay().find('.cl-header__back').trigger('click');
+        await overlay().find('.app-editor-header__back').trigger('click');
         await wrapper.find('.like-container__button--edit').trigger('click');
         await overlay().trigger('transitionend', {
             propertyName: 'visibility',

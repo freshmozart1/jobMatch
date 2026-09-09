@@ -151,7 +151,8 @@ describe('ApplicationEditorPage', () => {
 
     it('mounts in the menu view with "Application Editor" header', () => {
         const wrapper = mount(ApplicationEditorPage, { props: { job } });
-        const heading = wrapper.find('.cl-header__title');
+        const heading = wrapper.find('.app-editor-header__title');
+        expect(wrapper.find('.app-editor-header').exists()).toBe(true);
         expect(heading.text()).toBe(APPLICATION_EDITOR_NAME);
         expect(heading.element.tagName).toBe('H1');
         expect(heading.attributes('id')).toBe(
@@ -163,7 +164,7 @@ describe('ApplicationEditorPage', () => {
 
     it('navigates to the letter view when "Cover Letter" is clicked', async () => {
         const wrapper = await mountAndOpen();
-        expect(wrapper.find('.cl-header__title').text()).toBe(
+        expect(wrapper.find('.app-editor-header__title').text()).toBe(
             COVER_LETTER_NAME,
         );
         expect(wrapper.find('.cl-textarea').exists()).toBe(true);
@@ -171,14 +172,14 @@ describe('ApplicationEditorPage', () => {
 
     it('back from the letter view returns to the menu without emitting back', async () => {
         const wrapper = await mountAndOpen();
-        await wrapper.find('.cl-header__back').trigger('click');
+        await wrapper.find('.app-editor-header__back').trigger('click');
         expect(wrapper.find('.cl-menu').exists()).toBe(true);
         expect(wrapper.emitted('back')).toBeFalsy();
     });
 
     it('back from the menu emits back', async () => {
         const wrapper = mount(ApplicationEditorPage, { props: { job } });
-        await wrapper.find('.cl-header__back').trigger('click');
+        await wrapper.find('.app-editor-header__back').trigger('click');
         expect(wrapper.emitted('back')).toBeTruthy();
     });
 
