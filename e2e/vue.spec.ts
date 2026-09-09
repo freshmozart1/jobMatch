@@ -21,6 +21,19 @@ const mockJob = {
     match: 0.87,
 };
 
+const mockJobs = [
+    mockJob,
+    {
+        ...mockJob,
+        sourceJobId: 'mobile-layout-test-2',
+        sourceUrl: 'https://example.com/jobs/mobile-layout-test-2',
+        title: 'Backend Developer',
+        descriptionText: 'The next deterministic job in the swipe deck.',
+        duplicateKey: 'example:mobile-layout-test-2',
+        match: 0.82,
+    },
+];
+
 async function loadPopulatedMatchPage(
     page: Page,
     viewport: { width: number; height: number },
@@ -34,7 +47,7 @@ async function loadPopulatedMatchPage(
         );
     });
     if (activeScrape) {
-        await page.addInitScript((job) => {
+        await page.addInitScript((jobs) => {
             const originalFetch = window.fetch.bind(window);
             window.fetch = (input, init) => {
                 if (String(input).endsWith('/scrape/linkedin')) {
@@ -54,11 +67,13 @@ async function loadPopulatedMatchPage(
                                     })}\n\n`,
                                 ),
                             );
-                            controller.enqueue(
-                                encoder.encode(
-                                    `data: ${JSON.stringify({ type: 'job', job })}\n\n`,
-                                ),
-                            );
+                            for (const job of jobs) {
+                                controller.enqueue(
+                                    encoder.encode(
+                                        `data: ${JSON.stringify({ type: 'job', job })}\n\n`,
+                                    ),
+                                );
+                            }
                             init?.signal?.addEventListener('abort', () => {
                                 controller.error(
                                     new DOMException(
@@ -80,13 +95,18 @@ async function loadPopulatedMatchPage(
                 }
                 return originalFetch(input, init);
             };
-        }, mockJob);
+        }, mockJobs);
     } else {
         await page.route('**/scrape/linkedin', async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: 'text/event-stream',
-                body: `data: ${JSON.stringify({ type: 'job', job: mockJob })}\n\n`,
+                body: mockJobs
+                    .map(
+                        (job) =>
+                            `data: ${JSON.stringify({ type: 'job', job })}\n\n`,
+                    )
+                    .join(''),
             });
         });
     }
@@ -183,6 +203,36 @@ test('keeps sticky like controls visible while swiping on compact portrait', asy
     await page.mouse.up();
     await expect(likeContainer).toBeVisible();
 });
+
+for (const { control, expectedLike } of [
+    { control: 'Dislike', expectedLike: false },
+    { control: 'Like', expectedLike: true },
+]) {
+    test(`${control} button rates the current job and advances the deck`, async ({
+        page,
+    }) => {
+        await page.route('**/jobs/create', async (route) => {
+            await route.fulfill({
+                status: 201,
+                contentType: 'application/json',
+                body: '{}',
+            });
+        });
+        await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+
+        const createRequest = page.waitForRequest('**/jobs/create');
+        await page.getByRole('button', { name: control, exact: true }).click();
+        const request = await createRequest;
+
+        await expect(
+            page.locator('.job-card-stack__current .job-card'),
+        ).toContainText(mockJobs[1].title);
+        expect(request.postDataJSON()).toEqual({
+            job: mockJobs[0],
+            like: expectedLike,
+        });
+    });
+}
 
 test('keeps Application Editor focus modal, restores its launcher, and reopens cleanly', async ({
     page,

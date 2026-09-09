@@ -60,6 +60,55 @@ describe('JobCardStack', () => {
         });
     });
 
+    it.each([
+        {
+            control: 'dislike',
+            expectedLike: false,
+            expectedDirection: -1,
+        },
+        { control: 'like', expectedLike: true, expectedDirection: 1 },
+    ])(
+        'commits a $control button click through the swipe flow',
+        async ({ control, expectedLike, expectedDirection }) => {
+            const wrapper = mount(JobCardStack, { props: { jobs } });
+            const firstCard = wrapper.find(
+                '.job-card-stack__current .job-card',
+            );
+
+            await wrapper
+                .find(`.like-container__button--${control}`)
+                .trigger('click');
+
+            const transform = firstCard.attributes('style') ?? '';
+            const offset = Number(
+                transform.match(/translateX\((-?[\d.]+)px\)/)?.[1],
+            );
+            expect(Math.sign(offset)).toBe(expectedDirection);
+
+            await firstCard.trigger('transitionend');
+
+            expect(wrapper.emitted('like')).toEqual([[jobs[0], expectedLike]]);
+            expect(
+                wrapper.findComponent(JobCardContainer).props('job'),
+            ).toMatchObject({ title: 'Second' });
+        },
+    );
+
+    it('ignores repeated rating clicks while the card is leaving', async () => {
+        const wrapper = mount(JobCardStack, { props: { jobs } });
+        const firstCard = wrapper.find('.job-card-stack__current .job-card');
+        const likeButton = wrapper.find('.like-container__button--like');
+
+        await likeButton.trigger('click');
+        await likeButton.trigger('click');
+        await firstCard.trigger('transitionend');
+
+        expect(wrapper.emitted('like')).toEqual([[jobs[0], true]]);
+        expect(
+            wrapper.findComponent(JobCardContainer).props('job'),
+        ).toMatchObject({ title: 'Second' });
+    });
+
     it('renders the empty state once all jobs are swiped away', async () => {
         const wrapper = mount(JobCardStack, { props: { jobs } });
 

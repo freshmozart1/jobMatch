@@ -17,7 +17,11 @@ withDefaults(
     },
 );
 
-const emit = defineEmits<{ edit: [trigger: HTMLButtonElement] }>();
+const emit = defineEmits<{
+    dislike: [];
+    edit: [trigger: HTMLButtonElement];
+    like: [];
+}>();
 
 function openApplicationEditor(event: MouseEvent): void {
     emit('edit', event.currentTarget as HTMLButtonElement);
@@ -31,6 +35,7 @@ function openApplicationEditor(event: MouseEvent): void {
             class="like-container__button like-container__button--dislike"
             :style="{ opacity: dislikeOpacity }"
             aria-label="Dislike"
+            @click="emit('dislike')"
         >
             <svg
                 class="like-container__icon"
@@ -68,6 +73,7 @@ function openApplicationEditor(event: MouseEvent): void {
             class="like-container__button like-container__button--like"
             :style="{ opacity: likeOpacity }"
             aria-label="Like"
+            @click="emit('like')"
         >
             <svg
                 class="like-container__icon"
