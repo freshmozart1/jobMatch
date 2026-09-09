@@ -3,6 +3,9 @@ import type { Mock } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import {
     APPLICATION_EDITOR_DIALOG_TITLE_ID,
+    APPLICATION_EDITOR_HEADER_BACK_CLASS,
+    APPLICATION_EDITOR_HEADER_CLASS,
+    APPLICATION_EDITOR_HEADER_TITLE_CLASS,
     APPLICATION_EDITOR_NAME,
     COVER_LETTER_NAME,
 } from '@/components/application';
@@ -151,8 +154,12 @@ describe('ApplicationEditorPage', () => {
 
     it('mounts in the menu view with "Application Editor" header', () => {
         const wrapper = mount(ApplicationEditorPage, { props: { job } });
-        const heading = wrapper.find('.app-editor-header__title');
-        expect(wrapper.find('.app-editor-header').exists()).toBe(true);
+        const heading = wrapper.find(
+            `.${APPLICATION_EDITOR_HEADER_TITLE_CLASS}`,
+        );
+        expect(
+            wrapper.find(`.${APPLICATION_EDITOR_HEADER_CLASS}`).exists(),
+        ).toBe(true);
         expect(heading.text()).toBe(APPLICATION_EDITOR_NAME);
         expect(heading.element.tagName).toBe('H1');
         expect(heading.attributes('id')).toBe(
@@ -164,22 +171,26 @@ describe('ApplicationEditorPage', () => {
 
     it('navigates to the letter view when "Cover Letter" is clicked', async () => {
         const wrapper = await mountAndOpen();
-        expect(wrapper.find('.app-editor-header__title').text()).toBe(
-            COVER_LETTER_NAME,
-        );
+        expect(
+            wrapper.find(`.${APPLICATION_EDITOR_HEADER_TITLE_CLASS}`).text(),
+        ).toBe(COVER_LETTER_NAME);
         expect(wrapper.find('.cl-textarea').exists()).toBe(true);
     });
 
     it('back from the letter view returns to the menu without emitting back', async () => {
         const wrapper = await mountAndOpen();
-        await wrapper.find('.app-editor-header__back').trigger('click');
+        await wrapper
+            .find(`.${APPLICATION_EDITOR_HEADER_BACK_CLASS}`)
+            .trigger('click');
         expect(wrapper.find('.cl-menu').exists()).toBe(true);
         expect(wrapper.emitted('back')).toBeFalsy();
     });
 
     it('back from the menu emits back', async () => {
         const wrapper = mount(ApplicationEditorPage, { props: { job } });
-        await wrapper.find('.app-editor-header__back').trigger('click');
+        await wrapper
+            .find(`.${APPLICATION_EDITOR_HEADER_BACK_CLASS}`)
+            .trigger('click');
         expect(wrapper.emitted('back')).toBeTruthy();
     });
 

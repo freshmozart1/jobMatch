@@ -1,22 +1,27 @@
 <script setup lang="ts">
-import { APPLICATION_EDITOR_DIALOG_TITLE_ID } from './constants';
+import {
+    APPLICATION_EDITOR_DIALOG_TITLE_ID,
+    APPLICATION_EDITOR_HEADER_BACK_CLASS,
+    APPLICATION_EDITOR_HEADER_CLASS,
+    APPLICATION_EDITOR_HEADER_TITLE_CLASS,
+} from './constants';
 
 defineProps<{ title: string }>();
 defineEmits<{ back: [] }>();
 </script>
 
 <template>
-    <header class="app-editor-header">
+    <header :class="APPLICATION_EDITOR_HEADER_CLASS">
         <h1
             :id="APPLICATION_EDITOR_DIALOG_TITLE_ID"
-            class="app-editor-header__title"
+            :class="APPLICATION_EDITOR_HEADER_TITLE_CLASS"
             tabindex="-1"
         >
             {{ title }}
         </h1>
         <button
             type="button"
-            class="app-editor-header__back"
+            :class="APPLICATION_EDITOR_HEADER_BACK_CLASS"
             @click="$emit('back')"
         >
             <svg
