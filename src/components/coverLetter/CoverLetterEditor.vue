@@ -92,6 +92,18 @@ watch(
     },
 );
 
+watch(
+    () => props.job.duplicateKey,
+    (duplicateKey, previousDuplicateKey) => {
+        if (
+            previousDuplicateKey !== undefined &&
+            duplicateKey !== previousDuplicateKey
+        ) {
+            closeRevision(false);
+        }
+    },
+);
+
 const safeUrl = computed(() =>
     props.job.sourceUrl.startsWith('https://') ? props.job.sourceUrl : null,
 );
@@ -184,6 +196,21 @@ function parseDescription(raw: string): Segment[] {
                 <label id="cl-revision-title" for="cl-revision-instruction">
                     How should AI revise this selection?
                 </label>
+                <div
+                    class="cl-revision__selection"
+                    role="group"
+                    aria-labelledby="cl-revision-selection-label"
+                >
+                    <span
+                        id="cl-revision-selection-label"
+                        class="cl-revision__selection-label"
+                    >
+                        Selected text
+                    </span>
+                    <p class="cl-revision__selection-text">
+                        {{ selectedRange.selectedText }}
+                    </p>
+                </div>
                 <input
                     id="cl-revision-instruction"
                     v-model="revisionInstruction"
@@ -374,6 +401,8 @@ function parseDescription(raw: string): Segment[] {
 
 .cl-revision {
     flex: 0 0 auto;
+    box-sizing: border-box;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -390,7 +419,38 @@ function parseDescription(raw: string): Segment[] {
     color: var(--text-color);
 }
 
+.cl-revision__selection {
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 9px 11px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.cl-revision__selection-label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--border-color);
+}
+
+.cl-revision__selection-text {
+    max-height: 120px;
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 19px;
+    color: var(--text-color);
+}
+
 .cl-revision__instruction {
+    box-sizing: border-box;
+    min-width: 0;
     width: 100%;
     min-height: 40px;
     padding: 9px 11px;
