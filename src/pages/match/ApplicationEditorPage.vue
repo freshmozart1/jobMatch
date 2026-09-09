@@ -4,6 +4,7 @@ import type { ScrapedJob } from '@/components/jobCard/types';
 import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
 import { CoverLetterEditor } from '@/components/coverLetter';
 import {
+    APPLICATION_EDITOR_NAME,
     ApplicationEditorHeader,
     ApplicationEditorMenu,
 } from '@/components/application';
@@ -377,7 +378,9 @@ const statusLabel = computed(() => {
 <template>
     <div class="editor">
         <ApplicationEditorHeader
-            :title="view === 'letter' ? 'Cover Letter' : 'Application Editor'"
+            :title="
+                view === 'letter' ? 'Cover Letter' : APPLICATION_EDITOR_NAME
+            "
             @back="handleBack"
         />
 

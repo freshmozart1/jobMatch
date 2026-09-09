@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
+import { APPLICATION_EDITOR_NAME } from '@/components/application';
 import ApplicationEditorPage from '@/pages/match/ApplicationEditorPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 
@@ -147,7 +148,7 @@ describe('ApplicationEditorPage', () => {
     it('mounts in the menu view with "Application Editor" header', () => {
         const wrapper = mount(ApplicationEditorPage, { props: { job } });
         const heading = wrapper.find('.cl-header__title');
-        expect(heading.text()).toBe('Application Editor');
+        expect(heading.text()).toBe(APPLICATION_EDITOR_NAME);
         expect(heading.element.tagName).toBe('H1');
         expect(heading.attributes('id')).toBe(
             'application-editor-dialog-title',

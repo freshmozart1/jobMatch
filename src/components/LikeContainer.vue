@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { APPLICATION_EDITOR_NAME } from '@/components/application';
+
 withDefaults(
     defineProps<{
         likeOpacity?: number;
@@ -41,7 +43,7 @@ function openApplicationEditor(event: MouseEvent): void {
         <button
             type="button"
             class="like-container__button like-container__button--edit"
-            aria-label="Open application editor"
+            :aria-label="`Open ${APPLICATION_EDITOR_NAME}`"
             aria-haspopup="dialog"
             aria-controls="application-editor-dialog"
             :aria-expanded="applicationEditorOpen"

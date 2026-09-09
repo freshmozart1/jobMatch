@@ -187,7 +187,7 @@ test('keeps Application Editor focus modal, restores its launcher, and reopens c
 
     const main = page.locator('.match-page');
     const editButton = page.getByRole('button', {
-        name: 'Open application editor',
+        name: 'Open Application Editor',
     });
 
     await editButton.focus();
