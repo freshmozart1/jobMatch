@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import CoverLetterEditor from '@/components/coverLetter/CoverLetterEditor.vue';
+import coverLetterEditorSource from '@/components/coverLetter/CoverLetterEditor.vue?raw';
 import type { ScrapedJob } from '@/components/jobCard/types';
 
 const baseJob: ScrapedJob = {
@@ -163,16 +164,24 @@ describe('CoverLetterEditor', () => {
         }
 
         it('opens a labelled inline dialog for a non-empty selection and emits the exact range and instruction', async () => {
-            const wrapper = mountEditor(
-                {},
-                { text: 'Hello selected world' },
-            );
+            const wrapper = mountEditor({}, { text: 'Hello selected world' });
             await selectText(wrapper, 6, 14);
 
             const dialog = wrapper.find('.cl-revision');
             expect(dialog.attributes('role')).toBe('dialog');
             expect(dialog.attributes('aria-labelledby')).toBe(
                 'cl-revision-title',
+            );
+            const selection = wrapper.find('.cl-revision__selection');
+            expect(selection.attributes('role')).toBe('group');
+            expect(selection.attributes('aria-labelledby')).toBe(
+                'cl-revision-selection-label',
+            );
+            expect(wrapper.find('.cl-revision__selection-label').text()).toBe(
+                'Selected text',
+            );
+            expect(wrapper.find('.cl-revision__selection-text').text()).toBe(
+                'selected',
             );
             const apply = wrapper.find('.cl-revision__apply');
             expect((apply.element as HTMLButtonElement).disabled).toBe(true);
@@ -192,12 +201,63 @@ describe('CoverLetterEditor', () => {
             ]);
         });
 
+        it('preserves multiline text and updates the preview when the selection changes', async () => {
+            const draft = 'First line\nSecond line\nThird line';
+            const wrapper = mountEditor({}, { text: draft });
+            const firstSelection = 'First line\nSecond line';
+            await selectText(wrapper, 0, firstSelection.length);
+
+            expect(
+                wrapper.find('.cl-revision__selection-text').element
+                    .textContent,
+            ).toBe(firstSelection);
+
+            const secondSelection = 'Second line\nThird line';
+            const secondStart = draft.indexOf('Second line');
+            await selectText(
+                wrapper,
+                secondStart,
+                secondStart + secondSelection.length,
+            );
+
+            expect(
+                wrapper.find('.cl-revision__selection-text').element
+                    .textContent,
+            ).toBe(secondSelection);
+        });
+
         it('does not open for a collapsed or whitespace-only selection', async () => {
             const wrapper = mountEditor({}, { text: 'Hello   world' });
             await selectText(wrapper, 5, 5);
             expect(wrapper.find('.cl-revision').exists()).toBe(false);
             await selectText(wrapper, 5, 8);
             expect(wrapper.find('.cl-revision').exists()).toBe(false);
+        });
+
+        it('clears the preview after a successful revision or a job change', async () => {
+            const wrapper = mountEditor({}, { text: 'Hello world' });
+            await selectText(wrapper, 0, 5);
+            await wrapper.setProps({ revising: true });
+            await wrapper.setProps({ revising: false, revisionError: null });
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
+
+            await selectText(wrapper, 6, 11);
+            await wrapper.setProps({
+                job: { ...baseJob, duplicateKey: 'linkedin:2002' },
+            });
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
+        });
+
+        it('uses border-box sizing for the revision instruction', async () => {
+            const wrapper = mountEditor({}, { text: 'Hello world' });
+            await selectText(wrapper, 0, 5);
+
+            expect(
+                wrapper.find('.cl-revision__instruction').classes(),
+            ).toContain('cl-revision__instruction');
+            expect(coverLetterEditorSource).toMatch(
+                /\.cl-revision__instruction\s*{[^}]*box-sizing:\s*border-box;/s,
+            );
         });
 
         it('closes and resets on Cancel or Escape', async () => {
@@ -219,7 +279,8 @@ describe('CoverLetterEditor', () => {
                 {},
                 {
                     text: 'Hello world',
-                    revisionError: 'Could not revise this text. Please try again.',
+                    revisionError:
+                        'Could not revise this text. Please try again.',
                 },
             );
             await selectText(wrapper, 6, 11);
@@ -243,6 +304,9 @@ describe('CoverLetterEditor', () => {
             );
             expect(wrapper.find('.cl-revision__error').text()).toContain(
                 'Could not revise',
+            );
+            expect(wrapper.find('.cl-revision__selection-text').text()).toBe(
+                'world',
             );
             expect(
                 (wrapper.find('.cl-generate').element as HTMLButtonElement)

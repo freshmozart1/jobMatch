@@ -506,6 +506,11 @@ describe('ApplicationEditorPage', () => {
         const textarea = wrapper.find('.cl-textarea');
         (textarea.element as HTMLTextAreaElement).setSelectionRange(start, end);
         await textarea.trigger('select');
+        expect(
+            wrapper.find('.cl-revision__selection-text').element.textContent,
+        ).toBe(
+            (textarea.element as HTMLTextAreaElement).value.slice(start, end),
+        );
         await wrapper
             .find('.cl-revision__instruction')
             .setValue(instruction);
@@ -619,6 +624,9 @@ describe('ApplicationEditorPage', () => {
                     .value,
             ).toBe(draft);
             expect(wrapper.find('.cl-revision').exists()).toBe(true);
+            expect(wrapper.find('.cl-revision__selection-text').text()).toBe(
+                draft.slice(2),
+            );
             expect(wrapper.find('.cl-revision__error').text()).toBe(
                 'Could not revise this text. Please try again.',
             );
@@ -709,6 +717,7 @@ describe('ApplicationEditorPage', () => {
             await flushPromises();
 
             expect(capturedSignal?.aborted).toBe(true);
+            expect(wrapper.find('.cl-revision').exists()).toBe(false);
             expect(wrapper.find('.cl-revision__error').exists()).toBe(false);
         });
     });
