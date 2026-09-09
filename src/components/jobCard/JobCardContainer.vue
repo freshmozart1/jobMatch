@@ -88,6 +88,17 @@ function onPointerMove(event: PointerEvent) {
     emitDrag();
 }
 
+function commitSwipe(direction: 'left' | 'right') {
+    if (committedDirection.value) {
+        return;
+    }
+    isDragging.value = false;
+    committedDirection.value = direction;
+    dragOffsetX.value =
+        direction === 'right' ? offscreenDistance : -offscreenDistance;
+    emitDrag({ progress: 1, direction });
+}
+
 function onPointerEnd(event: PointerEvent) {
     if (!isDragging.value) {
         return;
@@ -97,11 +108,7 @@ function onPointerEnd(event: PointerEvent) {
     target.releasePointerCapture?.(event.pointerId);
 
     if (Math.abs(dragOffsetX.value) >= maxDragDistance) {
-        const committed = dragOffsetX.value > 0 ? 'right' : 'left';
-        committedDirection.value = committed;
-        dragOffsetX.value =
-            committed === 'right' ? offscreenDistance : -offscreenDistance;
-        emitDrag({ progress: 1, direction: committed });
+        commitSwipe(dragOffsetX.value > 0 ? 'right' : 'left');
     } else {
         dragOffsetX.value = 0;
         emitDrag();
@@ -132,6 +139,8 @@ function onTransitionEnd() {
         :like-opacity="likeOpacity"
         :dislike-opacity="dislikeOpacity"
         :application-editor-open="applicationEditorOpen"
+        @dislike="commitSwipe('left')"
         @edit="emit('edit', $event)"
+        @like="commitSwipe('right')"
     />
 </template>

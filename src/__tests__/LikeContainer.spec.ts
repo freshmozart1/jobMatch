@@ -102,4 +102,22 @@ describe('LikeContainer', () => {
         expect(wrapper.emitted('edit')).toHaveLength(1);
         expect(wrapper.emitted('edit')![0]).toEqual([editButton.element]);
     });
+
+    it('emits dislike when the dislike button is clicked', async () => {
+        const wrapper = mount(LikeContainer);
+
+        await wrapper.find('.like-container__button--dislike').trigger('click');
+
+        expect(wrapper.emitted('dislike')).toEqual([[]]);
+        expect(wrapper.emitted('like')).toBeUndefined();
+    });
+
+    it('emits like when the like button is clicked', async () => {
+        const wrapper = mount(LikeContainer);
+
+        await wrapper.find('.like-container__button--like').trigger('click');
+
+        expect(wrapper.emitted('like')).toEqual([[]]);
+        expect(wrapper.emitted('dislike')).toBeUndefined();
+    });
 });

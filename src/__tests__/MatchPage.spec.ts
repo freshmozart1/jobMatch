@@ -638,6 +638,46 @@ describe('MatchPage', () => {
         );
     });
 
+    it.each([
+        { control: 'dislike', expectedLike: false },
+        { control: 'like', expectedLike: true },
+    ])(
+        'persists a $control button rating and advances the deck',
+        async ({ control, expectedLike }) => {
+            const fetchMock = mockFetch();
+            const wrapper = await mountLoadedMatchPage();
+            const firstCard = wrapper.find(
+                '.job-card-stack__current .job-card',
+            );
+
+            await wrapper
+                .find(`.like-container__button--${control}`)
+                .trigger('click');
+            await firstCard.trigger('transitionend');
+
+            await vi.waitFor(() => {
+                expect(
+                    wrapper.findComponent(JobCardContainer).props('job'),
+                ).toMatchObject({ title: testJobs[1]!.title });
+            });
+
+            const createCalls = fetchMock.mock.calls.filter((args) =>
+                args[0].endsWith('/jobs/create'),
+            );
+            expect(createCalls).toHaveLength(1);
+            const [, init] = createCalls[0] as unknown as [string, RequestInit];
+            expect(init).toEqual(
+                expect.objectContaining({
+                    method: 'POST',
+                    body: JSON.stringify({
+                        job: testJobs[0],
+                        like: expectedLike,
+                    }),
+                }),
+            );
+        },
+    );
+
     it('opens the Application Editor overlay for the top card when the pencil button is clicked', async () => {
         const wrapper = await mountLoadedMatchPage();
         const overlay = () => wrapper.findAll('.overlay')[0]!;
