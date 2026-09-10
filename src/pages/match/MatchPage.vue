@@ -415,6 +415,16 @@ function applyScrapeEvent(
     }
 }
 
+// Remember a failure that left nothing on screen: the persisted keywords make
+// the next mount re-run this very scrape, so without this a reload drops the
+// user straight back into the failure.
+function recordScrapeOutcome(): void {
+    const failedWithNothingToShow =
+        errorMessage.value !== null && jobs.value.length === 0;
+    saveScrapeError(failedWithNothingToShow ? errorMessage.value : null);
+    if (failedWithNothingToShow) lastFetchedParams = null;
+}
+
 async function fetchJobs(): Promise<void> {
     lastFetchedParams = {
         keywords: [...keywords.value],
@@ -464,15 +474,7 @@ async function fetchJobs(): Promise<void> {
         if (scrapeGeneration === myGeneration) {
             isLoading.value = false;
             stopElapsedTimer();
-            // Remember a failure that left nothing on screen: the persisted
-            // keywords make the next mount re-run this very scrape, so without
-            // this a reload drops the user straight back into the failure.
-            const failedWithNothingToShow =
-                errorMessage.value !== null && jobs.value.length === 0;
-            saveScrapeError(
-                failedWithNothingToShow ? errorMessage.value : null,
-            );
-            if (failedWithNothingToShow) lastFetchedParams = null;
+            recordScrapeOutcome();
         }
     }
 }
