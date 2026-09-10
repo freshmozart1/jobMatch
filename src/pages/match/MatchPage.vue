@@ -120,10 +120,15 @@ function updateKeywords(next: string[]): void {
 }
 
 const LAST_SCRAPE_ERROR_STORAGE_KEY = 'jobmatch.lastscrapeerror';
+// Also replaces an empty message, which would be remembered as a failure yet
+// render as no error at all — a reload would then skip the scrape silently.
+const FALLBACK_SCRAPE_ERROR = 'Failed to fetch jobs.';
 
 function loadScrapeError(): string | null {
     try {
-        return window.localStorage.getItem(LAST_SCRAPE_ERROR_STORAGE_KEY);
+        return (
+            window.localStorage.getItem(LAST_SCRAPE_ERROR_STORAGE_KEY) || null
+        );
     } catch {
         return null;
     }
@@ -254,9 +259,11 @@ function finishClosingSearch(event: TransitionEvent): void {
     searchDialogActive.value = false;
     const trigger = searchTrigger;
     searchTrigger = null;
+    // Every search launcher links itself to the dialog via `aria-controls`,
+    // so matching on that needs no update when a launcher is added.
     void restoreFocus(
         trigger,
-        '.match-filter__search, .match-empty__cta, .match-error__search, .scrape-cancel',
+        '[aria-controls="search-dialog"], .scrape-cancel',
     );
 }
 
@@ -392,7 +399,7 @@ function applyScrapeEvent(
 ): void {
     switch (event.type) {
         case 'error':
-            errorMessage.value = event.error;
+            errorMessage.value = event.error || FALLBACK_SCRAPE_ERROR;
             return;
         case 'progress':
             latestProgress.value = event;
@@ -449,9 +456,9 @@ async function fetchJobs(): Promise<void> {
         // neither is a failure, so neither may surface as an error message.
         if (scrapeGeneration === myGeneration && !signal.aborted) {
             errorMessage.value =
-                error instanceof Error
+                error instanceof Error && error.message
                     ? error.message
-                    : 'Failed to fetch jobs.';
+                    : FALLBACK_SCRAPE_ERROR;
         }
     } finally {
         if (scrapeGeneration === myGeneration) {
