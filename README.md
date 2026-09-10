@@ -44,6 +44,16 @@ to be running for jobMatch to do anything. See
   failure. The stopped search stays re-runnable as it is: opening the search
   sheet and closing it again starts the same search over, without having to
   change a parameter first.
+- **Recover from a failed search** — a scrape that ends in an error with no
+  jobs on screen shows a "Search failed" state
+  (`src/pages/match/MatchError.vue`) with the error, a "Try again" button that
+  re-runs the scrape, and an "Edit search" button that opens the search sheet;
+  closing the sheet re-runs the search even if nothing was changed. The failure
+  is remembered in `localStorage` (`jobmatch.lastscrapeerror`), so a reload
+  shows the same state instead of silently repeating the failing scrape, and
+  starting a new scrape clears it. A failure that arrives after jobs are
+  already on screen is not remembered: the deck stays swipeable and the error
+  shows as a warning above it.
 - **Match score** — the backend embeds each job ad and cosine-compares it with
   the average embedding of jobs you liked. If the ad is closer to the average
   of jobs you disliked, that similarity lowers its score. Search keywords only
