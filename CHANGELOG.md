@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.1
+
+### Fixed
+
+- A scrape that failed with no jobs to show left only a line of error text and
+  no way out, and since the saved search re-runs on load, reloading repeated
+  the failure. The match page now shows a "Search failed" state with
+  "Try again" and "Edit search" buttons, and remembers the failure in
+  `localStorage` so a reload returns to that state instead of repeating the
+  scrape. Starting a new scrape clears it (closes #86).
+
+### Internal
+
+- Extracted `recordScrapeOutcome()` from `fetchJobs()` to keep its complexity
+  down, and the search sheet's focus fallback now matches any launcher by
+  `[aria-controls="search-dialog"]` (#86).
+
 ## v0.5.0
 
 ### Added

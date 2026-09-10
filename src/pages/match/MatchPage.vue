@@ -12,6 +12,7 @@ import {
 } from '@/components/application';
 import ApplicationEditorPage from './ApplicationEditorPage.vue';
 import MatchEmpty from './MatchEmpty.vue';
+import MatchError from './MatchError.vue';
 import ScrapeProgressStatus from './ScrapeProgressStatus.vue';
 import SearchPage from './SearchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
@@ -113,6 +114,32 @@ function updateKeywords(next: string[]): void {
             'jobmatch.searchkeywords',
             JSON.stringify(next),
         );
+    } catch {
+        // ignore quota errors
+    }
+}
+
+const LAST_SCRAPE_ERROR_STORAGE_KEY = 'jobmatch.lastscrapeerror';
+// Also replaces an empty message, which would be remembered as a failure yet
+// render as no error at all — a reload would then skip the scrape silently.
+const FALLBACK_SCRAPE_ERROR = 'Failed to fetch jobs.';
+
+function loadScrapeError(): string | null {
+    try {
+        return (
+            window.localStorage.getItem(LAST_SCRAPE_ERROR_STORAGE_KEY) || null
+        );
+    } catch {
+        return null;
+    }
+}
+
+function saveScrapeError(message: string | null): void {
+    try {
+        if (message === null)
+            window.localStorage.removeItem(LAST_SCRAPE_ERROR_STORAGE_KEY);
+        else
+            window.localStorage.setItem(LAST_SCRAPE_ERROR_STORAGE_KEY, message);
     } catch {
         // ignore quota errors
     }
@@ -232,9 +259,11 @@ function finishClosingSearch(event: TransitionEvent): void {
     searchDialogActive.value = false;
     const trigger = searchTrigger;
     searchTrigger = null;
+    // Every search launcher links itself to the dialog via `aria-controls`,
+    // so matching on that needs no update when a launcher is added.
     void restoreFocus(
         trigger,
-        '.match-filter__search, .match-empty__cta, .scrape-cancel',
+        '[aria-controls="search-dialog"], .scrape-cancel',
     );
 }
 
@@ -370,7 +399,7 @@ function applyScrapeEvent(
 ): void {
     switch (event.type) {
         case 'error':
-            errorMessage.value = event.error;
+            errorMessage.value = event.error || FALLBACK_SCRAPE_ERROR;
             return;
         case 'progress':
             latestProgress.value = event;
@@ -384,6 +413,16 @@ function applyScrapeEvent(
         default:
             event satisfies never;
     }
+}
+
+// Remember a failure that left nothing on screen: the persisted keywords make
+// the next mount re-run this very scrape, so without this a reload drops the
+// user straight back into the failure.
+function recordScrapeOutcome(): void {
+    const failedWithNothingToShow =
+        errorMessage.value !== null && jobs.value.length === 0;
+    saveScrapeError(failedWithNothingToShow ? errorMessage.value : null);
+    if (failedWithNothingToShow) lastFetchedParams = null;
 }
 
 async function fetchJobs(): Promise<void> {
@@ -401,6 +440,7 @@ async function fetchJobs(): Promise<void> {
     isLoading.value = true;
     jobs.value = [];
     errorMessage.value = null;
+    saveScrapeError(null);
     scrapeCancelled.value = false;
     latestProgress.value = null;
     progressByKeyword.value.clear();
@@ -426,16 +466,21 @@ async function fetchJobs(): Promise<void> {
         // neither is a failure, so neither may surface as an error message.
         if (scrapeGeneration === myGeneration && !signal.aborted) {
             errorMessage.value =
-                error instanceof Error
+                error instanceof Error && error.message
                     ? error.message
-                    : 'Failed to fetch jobs.';
+                    : FALLBACK_SCRAPE_ERROR;
         }
     } finally {
         if (scrapeGeneration === myGeneration) {
             isLoading.value = false;
             stopElapsedTimer();
+            recordScrapeOutcome();
         }
     }
+}
+
+function retryScrape(): void {
+    void fetchJobs();
 }
 
 function cancelScrape(): void {
@@ -463,7 +508,13 @@ onUnmounted(() => {
 onMounted(() => {
     document.addEventListener('focusin', handleDialogFocusin, true);
     document.addEventListener('keydown', handleDialogKeydown, true);
-    if (keywords.value.length > 0) void fetchJobs();
+    if (keywords.value.length === 0) return;
+    const lastError = loadScrapeError();
+    if (lastError !== null) {
+        errorMessage.value = lastError; // no fetch — recovery controls instead
+        return;
+    }
+    void fetchJobs();
 });
 
 watch(searchOpen, (open) => {
@@ -511,12 +562,13 @@ watch(searchOpen, (open) => {
                 />
                 <CancelScrapeButton @cancel="cancelScrape" />
             </div>
-            <p
+            <MatchError
                 v-else-if="errorMessage && jobs.length === 0"
-                class="match-page__status match-page__status--error"
-            >
-                {{ errorMessage }}
-            </p>
+                :message="errorMessage"
+                :search-open="searchOpen"
+                @retry="retryScrape"
+                @open-search="openSearch"
+            />
             <template v-else>
                 <ScrapeProgressStatus
                     v-if="isLoading"
