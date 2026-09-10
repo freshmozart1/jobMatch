@@ -183,6 +183,16 @@ function mockFetch(playwrightHandler?: () => Promise<Response>) {
     return fetchMock;
 }
 
+function mountWithFailingScrape() {
+    const fetchMock = vi.fn((input: string) => {
+        if (input.endsWith('/scrape/linkedin'))
+            return Promise.reject(new Error('Network unreachable'));
+        return Promise.resolve(createJsonResponse({}));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return { wrapper: mount(MatchPage), fetchMock };
+}
+
 async function mountLoadedMatchPage() {
     const wrapper = mount(MatchPage);
 
@@ -601,7 +611,7 @@ describe('MatchPage', () => {
         stream.close();
 
         await vi.waitFor(() => {
-            expect(wrapper.find('.match-page__status--error').text()).toBe(
+            expect(wrapper.find('.match-error__message').text()).toBe(
                 'Scrape failed',
             );
         });
@@ -623,7 +633,7 @@ describe('MatchPage', () => {
             );
         });
         expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
-        expect(wrapper.find('.match-page__status--error').exists()).toBe(false);
+        expect(wrapper.find('.match-error').exists()).toBe(false);
     });
 
     it('renders a single like container for the top card', async () => {
@@ -1078,7 +1088,7 @@ describe('MatchPage', () => {
         await vi.waitFor(() => {
             expect(wrapper.find('.job-card-stack').exists()).toBe(true);
         });
-        expect(wrapper.find('.match-page__status--error').exists()).toBe(false);
+        expect(wrapper.find('.match-error').exists()).toBe(false);
         expect(wrapper.find('.match-page__status--warning').exists()).toBe(
             false,
         );
@@ -1130,10 +1140,137 @@ describe('MatchPage', () => {
 
         // The cancel control suppresses aborts, not real failures.
         await vi.waitFor(() => {
-            expect(wrapper.find('.match-page__status--error').text()).toBe(
+            expect(wrapper.find('.match-error__message').text()).toBe(
                 'Network unreachable',
             );
         });
+    });
+
+    it('keeps a retry and the search entry point reachable when a scrape fails with nothing to show', async () => {
+        const { wrapper } = mountWithFailingScrape();
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-error__message').text()).toBe(
+                'Network unreachable',
+            );
+        });
+        expect(wrapper.find('.match-error__retry').exists()).toBe(true);
+        expect(wrapper.find('.match-error__search').exists()).toBe(true);
+    });
+
+    it('re-runs the scrape when the retry control is clicked', async () => {
+        let playwrightCallCount = 0;
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((input: string) => {
+                if (input.endsWith('/scrape/linkedin')) {
+                    playwrightCallCount++;
+                    if (playwrightCallCount === 1)
+                        return Promise.reject(new Error('Network unreachable'));
+                    return Promise.resolve(
+                        createSseResponse(jobFrames(testJobs)),
+                    );
+                }
+                return Promise.resolve(createJsonResponse({}));
+            }),
+        );
+
+        const wrapper = mount(MatchPage);
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-error__retry').exists()).toBe(true);
+        });
+
+        await wrapper.find('.match-error__retry').trigger('click');
+
+        await vi.waitFor(() => {
+            expect(playwrightCallCount).toBe(2);
+            expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
+        });
+    });
+
+    it('opens the search sheet from the error state', async () => {
+        const { wrapper } = mountWithFailingScrape();
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-error__search').exists()).toBe(true);
+        });
+
+        await wrapper.find('.match-error__search').trigger('click');
+
+        expect(wrapper.find('#search-dialog').classes()).toContain(
+            'overlay--open',
+        );
+    });
+
+    it('remembers a scrape that failed with nothing to show', async () => {
+        mountWithFailingScrape();
+
+        await vi.waitFor(() => {
+            expect(
+                window.localStorage.getItem('jobmatch.lastscrapeerror'),
+            ).toBe('Network unreachable');
+        });
+    });
+
+    it('surfaces a remembered failure on mount instead of repeating the scrape', async () => {
+        window.localStorage.setItem(
+            'jobmatch.lastscrapeerror',
+            'Network unreachable',
+        );
+        const fetchMock = mockFetch();
+
+        const wrapper = mount(MatchPage);
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.find('.match-error__message').text()).toBe(
+            'Network unreachable',
+        );
+        expect(
+            fetchMock.mock.calls.some((args) =>
+                args[0].endsWith('/scrape/linkedin'),
+            ),
+        ).toBe(false);
+    });
+
+    it('forgets the remembered failure once a retried scrape succeeds', async () => {
+        window.localStorage.setItem(
+            'jobmatch.lastscrapeerror',
+            'Network unreachable',
+        );
+        mockFetch();
+
+        const wrapper = mount(MatchPage);
+        await wrapper.vm.$nextTick();
+        await wrapper.find('.match-error__retry').trigger('click');
+
+        await vi.waitFor(() => {
+            expect(wrapper.findComponent(JobCardContainer).exists()).toBe(true);
+            expect(
+                window.localStorage.getItem('jobmatch.lastscrapeerror'),
+            ).toBeNull();
+        });
+    });
+
+    it('does not remember a failure that arrived after jobs were already on screen', async () => {
+        const { wrapper, stream } = await mountWithFirstJobStreamed();
+
+        stream.push({
+            type: 'error',
+            error: 'Scrape failed',
+            reason: 'boom',
+        });
+        stream.close();
+
+        // The deck survives, so this is no dead end — nothing to remember.
+        await vi.waitFor(() => {
+            expect(wrapper.find('.match-page__status--warning').text()).toBe(
+                'Scrape failed',
+            );
+            expect(wrapper.find('.scrape-progress').exists()).toBe(false);
+        });
+        expect(
+            window.localStorage.getItem('jobmatch.lastscrapeerror'),
+        ).toBeNull();
     });
 
     it('re-runs the same search after a cancel when the search sheet is closed', async () => {

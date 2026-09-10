@@ -40,10 +40,6 @@
     text-align: center;
 }
 
-.match-page__status--error {
-    color: var(--error);
-}
-
 .match-page__status--warning {
     margin-bottom: var(--match-card-control-gap);
     color: var(--warning);
