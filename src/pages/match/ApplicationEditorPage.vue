@@ -171,6 +171,7 @@ watch(
             );
         } else {
             cvUpload.close();
+            abortRevision();
             generationEpoch++;
             cancelDocumentDownload();
         }
@@ -381,6 +382,22 @@ function retryDraftSave() {
     void saveSession?.flush();
 }
 
+type RevisionRequest = {
+    controller: AbortController;
+    key: string;
+    draft: string;
+};
+
+function isCurrentRevision(request: RevisionRequest): boolean {
+    return (
+        revisionAbortController === request.controller &&
+        !request.controller.signal.aborted &&
+        props.active &&
+        props.job.duplicateKey === request.key &&
+        text.value === request.draft
+    );
+}
+
 async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
     if (revising.value) return;
 
@@ -394,8 +411,12 @@ async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
         return;
     }
 
-    const keyAtStart = props.job.duplicateKey;
     const controller = new AbortController();
+    const request: RevisionRequest = {
+        controller,
+        key: props.job.duplicateKey,
+        draft: draftAtStart,
+    };
     revisionAbortController = controller;
     revising.value = true;
     resetRevision();
@@ -418,12 +439,7 @@ async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
             },
             controller.signal,
         );
-        if (
-            keyAtStart !== props.job.duplicateKey ||
-            text.value !== draftAtStart
-        ) {
-            return;
-        }
+        if (!isCurrentRevision(request)) return;
         if (
             typeof replacementText !== 'string' ||
             replacementText.trim().length === 0
@@ -437,6 +453,7 @@ async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
                 draftAtStart.slice(selection.end),
         );
     } catch (error) {
+        if (!isCurrentRevision(request)) return;
         if (error instanceof DOMException && error.name === 'AbortError')
             return;
         revisionError.value = 'Could not revise this text. Please try again.';
@@ -537,6 +554,7 @@ const statusLabel = computed(() => {
             @generate="generateCoverLetter"
             @revise="reviseCoverLetter"
             @reset-revision="resetRevision"
+            @cancel-revision="abortRevision"
         />
     </div>
 </template>

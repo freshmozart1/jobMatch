@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 import type { CoverLetterRevisionSelection } from './types';
 
@@ -20,6 +20,7 @@ const emit = defineEmits<{
     generate: [];
     revise: [selection: CoverLetterRevisionSelection];
     resetRevision: [];
+    cancelRevision: [];
 }>();
 
 type SelectedRange = {
@@ -30,6 +31,8 @@ type SelectedRange = {
 
 const selectedRange = ref<SelectedRange | null>(null);
 const revisionInstruction = ref('');
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const cancelRef = ref<HTMLButtonElement | null>(null);
 
 const canSubmitRevision = computed(
     () =>
@@ -42,6 +45,24 @@ function closeRevision(notifyParent = true) {
     selectedRange.value = null;
     revisionInstruction.value = '';
     if (notifyParent) emit('resetRevision');
+}
+
+async function dismissRevision() {
+    const caret = selectedRange.value?.end;
+    closeRevision();
+    emit('cancelRevision');
+    await nextTick();
+    const textarea = textareaRef.value;
+    if (!textarea) return;
+    if (caret !== undefined) textarea.setSelectionRange(caret, caret);
+    textarea.focus();
+}
+
+function handleRevisionEscape(event: KeyboardEvent) {
+    if (!selectedRange.value || event.defaultPrevented) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void dismissRevision();
 }
 
 function captureSelection(event: Event) {
@@ -85,8 +106,11 @@ function generateCoverLetter() {
 
 watch(
     () => props.revising,
-    (revising, wasRevising) => {
-        if (wasRevising && !revising && props.revisionError === null) {
+    async (revising, wasRevising) => {
+        if (revising) {
+            await nextTick();
+            if (props.revising) cancelRef.value?.focus();
+        } else if (wasRevising && props.revisionError === null) {
             closeRevision(false);
         }
     },
@@ -176,6 +200,7 @@ function parseDescription(raw: string): Segment[] {
                 </template>
             </div>
             <textarea
+                ref="textareaRef"
                 class="cl-textarea"
                 :value="text"
                 :disabled="revising"
@@ -183,7 +208,7 @@ function parseDescription(raw: string): Segment[] {
                 :spellcheck="false"
                 @input="handleInput"
                 @select="captureSelection"
-                @keydown.esc="closeRevision()"
+                @keydown.esc="handleRevisionEscape"
             />
             <form
                 v-if="selectedRange"
@@ -191,7 +216,7 @@ function parseDescription(raw: string): Segment[] {
                 role="dialog"
                 aria-labelledby="cl-revision-title"
                 @submit.prevent="submitRevision"
-                @keydown.esc="closeRevision()"
+                @keydown.esc="handleRevisionEscape"
             >
                 <label id="cl-revision-title" for="cl-revision-instruction">
                     How should AI revise this selection?
@@ -225,10 +250,10 @@ function parseDescription(raw: string): Segment[] {
                 </p>
                 <div class="cl-revision__actions">
                     <button
+                        ref="cancelRef"
                         type="button"
                         class="cl-revision__cancel"
-                        :disabled="revising"
-                        @click="closeRevision()"
+                        @click="dismissRevision"
                     >
                         Cancel
                     </button>
