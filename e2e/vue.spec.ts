@@ -426,6 +426,99 @@ test('retries an offline Dislike without rescraping or changing the intended rat
     expect(scrapeRequests).toBe(1);
 });
 
+for (const existing of [false, true]) {
+    test(`recovers a ${existing ? 'replacement' : 'first-time'} CV upload with the intended PDF`, async ({
+        page,
+    }) => {
+        await loadPopulatedMatchPage(page, { width: 360, height: 640 });
+        await page.route('**/cv/*/status', async (route) => {
+            await route.fulfill({
+                status: existing ? 200 : 404,
+                contentType: 'application/json',
+                body: '{}',
+            });
+        });
+        await page.route('**/jobs/create', async (route) => {
+            await route.fulfill({
+                status: 201,
+                contentType: 'application/json',
+                body: '{}',
+            });
+        });
+        await page.route(`**/cv/${mockJob.duplicateKey}`, async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/pdf',
+                body: '%PDF-1.4 previous synthetic CV',
+            });
+        });
+        const uploads: Route[] = [];
+        await page.route('**/cv/upload', async (route) => {
+            uploads.push(route);
+            if (uploads.length === 1)
+                await route.fulfill({
+                    status: existing ? 500 : 400,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ message: 'Synthetic rejection' }),
+                });
+        });
+        await page
+            .getByRole('button', {
+                name: `Open ${APPLICATION_EDITOR_NAME}`,
+            })
+            .click();
+        const editor = page.locator(`#${APPLICATION_EDITOR_DIALOG_ID}`);
+        await expect(
+            editor.getByRole('button', { name: 'Download CV', exact: true }),
+        ).toHaveJSProperty('disabled', !existing);
+        await editor.locator('input[type="file"]').setInputFiles({
+            name: 'intended-cv.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF-1.4 intended synthetic CV'),
+        });
+        const notice = editor.getByTestId('cv-upload-notice');
+        await expect(notice.getByRole('alert')).toContainText(
+            'intended-cv.pdf',
+        );
+        await expect(notice.getByRole('alert')).toContainText('try again');
+        const cvDownload = editor.getByRole('button', {
+            name: 'Download CV',
+            exact: true,
+        });
+        await expect(cvDownload).toHaveJSProperty('disabled', !existing);
+        await expect(
+            notice
+                .locator('p')
+                .filter({ hasText: 'an attached CV remains available' }),
+        ).toHaveCount(existing ? 1 : 0);
+        await notice.getByRole('button', { name: 'Retry CV upload' }).click();
+        await expect.poll(() => uploads.length).toBe(2);
+        await expect(notice.getByRole('button')).toBeDisabled();
+        await expect(notice.getByRole('status')).toContainText(
+            'Uploading intended-cv.pdf',
+        );
+        const body = uploads[1].request().postDataBuffer()!.toString();
+        expect(body).toContain('filename="intended-cv.pdf"');
+        expect(body).toContain('%PDF-1.4 intended synthetic CV');
+        expect(body).toContain(mockJob.duplicateKey);
+        await uploads[1].fulfill({
+            status: 201,
+            contentType: 'application/json',
+            body: '{}',
+        });
+        await expect(notice.getByRole('status')).toContainText(
+            'Uploaded intended-cv.pdf',
+        );
+        await expect(cvDownload).toBeEnabled();
+        await expect(notice.getByRole('button')).toHaveCount(0);
+        expect(uploads).toHaveLength(2);
+        const width = await notice.evaluate(
+            (element) => element.getBoundingClientRect().width,
+        );
+        expect(width).toBeLessThanOrEqual(360);
+    });
+}
+
 test('keeps Application Editor focus modal, restores its launcher, and reopens cleanly', async ({
     page,
 }) => {
