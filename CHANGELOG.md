@@ -2,6 +2,49 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.7
+
+### Fixed
+
+- Failed Like/Dislike saves now show the original job and intended choice with
+  a retry control. The page retains pending ratings across filters and new
+  searches, prevents overlapping retries, and clears each only after a
+  successful response. Retrying needs no rescrape and cannot replace the queued
+  choice with a rediscovered job. The recovery notice keeps mobile card controls
+  in view (#102).
+
+## v0.5.6
+
+### Fixed
+
+- Swiped jobs no longer reappear when the match filter or threshold changes.
+  The page tracks consumed job keys for the current search and the stack shows
+  the remaining jobs without advancing a second cursor. Hidden unseen jobs and
+  newly streamed jobs remain reachable, cancellation keeps swipe history, and
+  starting a fresh search resets it (#101).
+
+## v0.5.5
+
+### Fixed
+
+- Generated letters acknowledged with `saved: true` now keep their original
+  server-saved segments and embeddings instead of uploading the unchanged text
+  again. The saved baseline survives closing/reopening the editor; PDF downloads
+  create a missing job record separately. Manual edits and legacy generation
+  responses still autosave, and stale generated results still restore the
+  current manual draft (#105).
+
+## v0.5.4
+
+### Fixed
+
+- AI generation no longer overwrites edits made while it runs. Generation and
+  uploads share a per-job queue; stale or closed-editor results are discarded
+  and the latest manual draft is restored on the server. Reopened editors join
+  pending generation, and a failed restoration offers a save retry. Cleared
+  drafts stay local with an explicit unsaved message because the server cannot
+  store an empty letter (#99).
+
 ## v0.5.3
 
 ### Fixed

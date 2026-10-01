@@ -279,6 +279,9 @@ test('keeps live progress and populated controls inside a mobile viewport', asyn
 test('keeps sticky like controls visible while swiping on compact portrait', async ({
     page,
 }) => {
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
     await loadPopulatedMatchPage(page, { width: 360, height: 640 });
 
     const card = page.locator('.job-card-stack__current .job-card');
@@ -329,6 +332,99 @@ for (const { control, expectedLike } of [
         });
     });
 }
+
+test('keeps rated jobs dismissed across match filters without skipping unseen cards', async ({
+    page,
+}) => {
+    const ratedKeys: string[] = [];
+    await page.route('**/jobs/create', async (route) => {
+        ratedKeys.push(route.request().postDataJSON().job.duplicateKey);
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    const current = page.locator('.job-card-stack__current h2');
+    await expect(current).toHaveText(mockJobs[0].title);
+    await page.getByRole('button', { name: 'Like', exact: true }).click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    const filter = page.getByRole('switch', {
+        name: 'Only show jobs at or above the minimum match',
+    });
+    await filter.click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    const threshold = page.getByRole('spinbutton', {
+        name: 'Minimum match percentage',
+    });
+    await threshold.fill('85');
+    await expect(current).toHaveCount(0);
+    await threshold.fill('80');
+    await expect(current).toHaveText(mockJobs[1].title);
+    await filter.click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    await page.getByRole('button', { name: 'Dislike', exact: true }).click();
+    await expect(current).toHaveCount(0);
+    await filter.click();
+    await expect(current).toHaveCount(0);
+    expect(ratedKeys).toEqual(mockJobs.map((job) => job.duplicateKey));
+});
+
+test('retries an offline Dislike without rescraping or changing the intended rating', async ({
+    page,
+}) => {
+    const attempts: Route[] = [];
+    let scrapeRequests = 0;
+    page.on('request', (request) => {
+        if (request.url().endsWith('/scrape/linkedin')) scrapeRequests++;
+    });
+    await page.route('**/jobs/create', async (route) => {
+        attempts.push(route);
+        if (attempts.length === 1) await route.abort('internetdisconnected');
+    });
+    await loadPopulatedMatchPage(page, { width: 360, height: 640 });
+    await page.getByRole('button', { name: 'Dislike', exact: true }).click();
+    const recovery = page.locator(
+        `[data-rating-key="${mockJob.duplicateKey}"]`,
+    );
+    await expect(recovery.getByRole('alert')).toContainText(
+        'Could not confirm Dislike',
+    );
+    await expect(recovery).toContainText(mockJob.title);
+    await expect(page.locator('.job-card-stack__current h2')).toHaveText(
+        mockJobs[1].title,
+    );
+    await page
+        .getByRole('switch', {
+            name: 'Only show jobs at or above the minimum match',
+        })
+        .click();
+    await expect(recovery).toBeVisible();
+    const controls = await page.locator('.like-container').boundingBox();
+    expect(controls).not.toBeNull();
+    expect(controls!.y + controls!.height).toBeLessThanOrEqual(640);
+    const retry = recovery.getByRole('button', {
+        name: `Retry Dislike for ${mockJob.title}`,
+    });
+    await retry.click();
+    await expect.poll(() => attempts.length).toBe(2);
+    await expect(retry).toBeDisabled();
+    await expect(recovery.getByRole('status')).toContainText(
+        'Retrying Dislike',
+    );
+    expect(attempts[1].request().postDataJSON()).toEqual({
+        job: mockJob,
+        like: false,
+    });
+    await attempts[1].fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: '{}',
+    });
+    await expect(recovery).toHaveCount(0);
+    await expect(page.locator('.job-card-stack__current h2')).toHaveText(
+        mockJobs[1].title,
+    );
+    expect(attempts).toHaveLength(2);
+    expect(scrapeRequests).toBe(1);
+});
 
 test('keeps Application Editor focus modal, restores its launcher, and reopens cleanly', async ({
     page,
@@ -446,6 +542,130 @@ test('saves the latest draft before an application download and retries a failed
     expect(downloadedDrafts).toEqual([draft]);
     await expect(editor.getByRole('alert')).toHaveCount(0);
     await expect(download).toBeEnabled();
+});
+
+test('keeps manual edits when generation finishes and restores the server draft', async ({
+    page,
+}) => {
+    const generations: Route[] = [];
+    const uploads: Route[] = [];
+    let storedDraft = '';
+    const manualDraft = 'The manual draft written while AI was working.';
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/cover-letters/create/text', (route) => {
+        generations.push(route);
+    });
+    await page.route('**/cover-letters/upload/text', (route) => {
+        uploads.push(route);
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    await page
+        .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+        .click();
+    await page.locator('.cl-action__row').first().click();
+    await page.locator('.cl-generate').click();
+    await expect.poll(() => generations.length).toBe(1);
+    const textarea = page.locator('.cl-textarea');
+    await textarea.fill(manualDraft);
+    expect(uploads).toHaveLength(0);
+    storedDraft = 'Generated from older context';
+    await generations[0].fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ coverLetter: storedDraft, saved: true }),
+    });
+    await expect(textarea).toHaveValue(manualDraft);
+    await expect(page.locator('.editor')).toContainText(
+        'generated text was discarded',
+    );
+    await expect.poll(() => uploads.length).toBe(1);
+    expect(uploads[0].request().postDataJSON().coverLetterText).toBe(
+        manualDraft,
+    );
+    storedDraft = uploads[0].request().postDataJSON().coverLetterText;
+    await uploads[0].fulfill({ status: 201, body: '{}' });
+    await expect(page.locator('.editor .cl-meta')).toContainText(
+        'Saved to server',
+    );
+    expect(storedDraft).toBe(manualDraft);
+    expect(
+        await page.evaluate(
+            (key) => localStorage.getItem(key),
+            `jobmatch.coverletter.${mockJob.duplicateKey}`,
+        ),
+    ).toBe(manualDraft);
+});
+
+test('downloads acknowledged generation after reopening without re-segmenting it', async ({
+    page,
+}) => {
+    await page.clock.install();
+    const originalSegments = [
+        { kind: 'opening', text: 'Generated introduction.' },
+        { kind: 'closing', text: 'Generated conclusion.' },
+    ];
+    let storedSegments = originalSegments;
+    let plainTextUploads = 0;
+    let jobStored = false;
+    await page.route('**/cover-letters/create/text', async (route) => {
+        await route.fulfill({
+            status: 201,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                coverLetter: 'Generated introduction. Generated conclusion.',
+                saved: true,
+            }),
+        });
+    });
+    await page.route('**/cover-letters/upload/text', async (route) => {
+        plainTextUploads++;
+        storedSegments = [
+            {
+                kind: 'resegmented',
+                text: route.request().postDataJSON().coverLetterText,
+            },
+        ];
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/jobs/create', async (route) => {
+        jobStored = true;
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route(
+        `**/cover-letters/${mockJob.duplicateKey}`,
+        async (route) => {
+            await route.fulfill({
+                status: jobStored ? 200 : 404,
+                contentType: 'application/pdf',
+                body: '%PDF-synthetic',
+            });
+        },
+    );
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    const launcher = page.getByRole('button', {
+        name: `Open ${APPLICATION_EDITOR_NAME}`,
+    });
+    await launcher.click();
+    await page.locator('.cl-action__row').first().click();
+    await page.locator('.cl-generate').click();
+    await expect(page.locator('.editor .cl-meta')).toContainText(
+        'Saved to server',
+    );
+    await page.clock.fastForward(3100);
+    await page.locator('.editor').getByRole('button', { name: 'Back' }).click();
+    await page.locator('.editor').getByRole('button', { name: 'Back' }).click();
+    await expect(page.locator('.editor')).toHaveCount(0);
+    await launcher.click();
+    const file = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download cover letter' }).click();
+    expect((await file).suggestedFilename()).toBe(
+        'cover-letter-example-mobile-layout-test.pdf',
+    );
+    expect(jobStored).toBe(true);
+    expect(plainTextUploads).toBe(0);
+    expect(storedSegments).toBe(originalSegments);
 });
 
 test('revises the exact selected cover-letter range through the released server contract', async ({
