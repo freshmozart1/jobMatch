@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.7
+
+### Fixed
+
+- Failed Like/Dislike saves now show the original job and intended choice with
+  a retry control. The page retains pending ratings across filters and new
+  searches, prevents overlapping retries, and clears each only after a
+  successful response. Retrying needs no rescrape and cannot replace the queued
+  choice with a rediscovered job. The recovery notice keeps mobile card controls
+  in view (#102).
+
 ## v0.5.6
 
 ### Fixed

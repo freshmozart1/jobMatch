@@ -24,7 +24,9 @@ import MatchError from './MatchError.vue';
 import ScrapeProgressStatus from './ScrapeProgressStatus.vue';
 import SearchPage from './SearchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { postJson, postJsonEventStream } from '@/lib/api';
+import { postJsonEventStream } from '@/lib/api';
+import { createRatingSaves } from '@/lib/ratingSaves';
+import RatingSaveStatus from './RatingSaveStatus.vue';
 import { DEFAULT_DATE_POSTED } from './searchParams';
 import {
     coverLetterSavesKey,
@@ -36,6 +38,12 @@ provide(coverLetterSavesKey, createCoverLetterSaves());
 
 const jobs = ref<ScrapedJob[]>([]);
 const consumedJobKeys = ref(new Set<string>());
+const {
+    recoveries,
+    enqueue: saveRating,
+    retry: retryRating,
+    keys: ratingKeys,
+} = createRatingSaves();
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 const scrapeCancelled = ref(false);
@@ -354,18 +362,7 @@ function handleDialogKeydown(event: KeyboardEvent): void {
 function rateJob(job: ScrapedJob, like: boolean): void {
     if (consumedJobKeys.value.has(job.duplicateKey)) return;
     consumedJobKeys.value.add(job.duplicateKey);
-    void createJob(job, like);
-}
-
-async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
-    try {
-        await postJson('/jobs/create', { job, like });
-    } catch (error) {
-        console.error(
-            'Failed to create job:',
-            error instanceof Error ? error.message : error,
-        );
-    }
+    saveRating(job, like);
 }
 
 let scrapeGeneration = 0;
@@ -460,7 +457,8 @@ async function fetchJobs(): Promise<void> {
     const signal = scrapeAbortController.signal;
     isLoading.value = true;
     jobs.value = [];
-    consumedJobKeys.value.clear();
+    // Outstanding choices survive a new scrape and cannot be rated again there.
+    consumedJobKeys.value = new Set(ratingKeys());
     errorMessage.value = null;
     saveScrapeError(null);
     scrapeCancelled.value = false;
@@ -551,11 +549,13 @@ watch(searchOpen, (open) => {
         :class="[
             'match-page',
             { 'match-page--scraping-with-jobs': isLoading && jobs.length > 0 },
+            { 'match-page--rating-recovery': recoveries.length > 0 },
         ]"
         tabindex="-1"
         :inert="dialogActive || undefined"
     >
         <BrandBar />
+        <RatingSaveStatus :ratings="recoveries" @retry="retryRating" />
 
         <MatchEmpty
             v-if="!matchEnabled"
