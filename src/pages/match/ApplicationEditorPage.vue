@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
+import { getBlob, postJson } from '@/lib/api';
+import { createCvUpload } from '@/lib/cvUpload';
+import {
+    coverLetterSavesKey,
+    createCoverLetterSaves,
+    type GeneratedCoverLetter,
+} from '@/lib/coverLetterSaves';
 import { CoverLetterEditor } from '@/components/coverLetter';
+import GenerationNotice from '@/components/application/GenerationNotice.vue';
 import type { CoverLetterRevisionSelection } from '@/components/coverLetter';
 import {
     APPLICATION_EDITOR_NAME,
@@ -11,7 +18,10 @@ import {
     COVER_LETTER_NAME,
 } from '@/components/application';
 
-const props = defineProps<{ job: ScrapedJob }>();
+const props = withDefaults(
+    defineProps<{ job: ScrapedJob; active?: boolean }>(),
+    { active: true },
+);
 const emit = defineEmits<{ back: [] }>();
 
 const storageKey = computed(
@@ -34,20 +44,33 @@ function abortRevision() {
     resetRevision();
 }
 
-const cvUploaded = ref(false);
+const cvUpload = createCvUpload();
+const { uploaded: cvUploaded, notice: cvUploadNotice } = cvUpload;
 
 const letterDone = computed(() => text.value.trim().length > 0);
 
-type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
+const saves = inject(coverLetterSavesKey, createCoverLetterSaves, true);
+let saveSession: ReturnType<typeof saves.connect> | null = null;
+const saveStatus = ref<'idle' | 'pending' | 'saving' | 'saved' | 'error'>(
+    'idle',
+);
+const jobCreateFailed = ref(false);
+const generating = ref(false);
+const generationDiscarded = ref(false);
+const restorationFailed = ref(false);
+let generationEpoch = 0;
 
-// Each upload triggers segmentation + embedding calls on the server, so wait
-// for a real pause in typing before persisting.
-const UPLOAD_DEBOUNCE_MS = 3000;
-
-const saveStatus = ref<SaveStatus>('idle');
-const lastUploadedText = ref<string | null>(null);
-let uploadTimer: ReturnType<typeof setTimeout> | null = null;
-let uploadInFlight = false;
+type DocumentKind = 'cover-letter' | 'application';
+type DocumentRequest = {
+    kind: DocumentKind;
+    key: string;
+    session: ReturnType<typeof saves.connect>;
+};
+const downloadStatus = ref<string | null>(null);
+const downloadError = ref<string | null>(null);
+const documentDownloadBusy = computed(() => downloadStatus.value !== null);
+let documentRequest: DocumentRequest | null = null;
+let retryDocumentKind: DocumentKind | null = null;
 
 // Fetches a blob, triggers a browser download for it, and cleans up the
 // object URL afterwards. Each call site gets its own instance so an
@@ -65,9 +88,11 @@ function createBlobDownload() {
     ) {
         if (inFlight) return;
         inFlight = true;
-        abortController = new AbortController();
+        const controller = new AbortController();
+        abortController = controller;
         try {
-            const blob = await fetchBlob(abortController.signal);
+            const blob = await fetchBlob(controller.signal);
+            if (controller.signal.aborted) return;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -107,146 +132,64 @@ const applicationDownload = createBlobDownload();
 const coverLetterDownload = createBlobDownload();
 const cvDownload = createBlobDownload();
 
-// Tracks per-job DB creation state within this component instance so we don't
-// re-create a job that was already saved, even after switching jobs and back.
-const jobDbCreationState = new Map<string, 'saved' | 'failed'>();
-
-// Reactive flag for the current job's creation failure — drives the error label.
-const jobCreateFailed = ref(false);
-
-// Mirrors the current job object so the job-change flush can pass the OLD job to
-// createJobIfNeeded (props.job has already updated by the time the watch runs).
-const prevJob = ref<ScrapedJob>(props.job);
-
 watch(
     () => props.job.duplicateKey,
-    async (newKey, oldKey) => {
+    (newKey) => {
+        generationEpoch++;
+        cancelDocumentDownload();
         abortRevision();
-        const jobToFlush = prevJob.value;
-        if (oldKey && uploadTimer !== null) {
-            void uploadNow(oldKey, text.value, jobToFlush);
-        }
-        prevJob.value = props.job;
-        lastUploadedText.value = null;
-        saveStatus.value = 'idle';
-        jobCreateFailed.value =
-            jobDbCreationState.get(props.job.duplicateKey) === 'failed';
+        saveSession?.close();
         view.value = 'menu';
+        let draft = '';
         try {
-            text.value = window.localStorage.getItem(storageKey.value) ?? '';
+            draft = window.localStorage.getItem(storageKey.value) ?? '';
         } catch {
-            text.value = '';
+            // The coordinator retains an in-flight draft if storage is unavailable.
         }
-        try {
-            await getJson(`/cv/${newKey}/status`);
-            if (newKey === props.job.duplicateKey) cvUploaded.value = true;
-        } catch {
-            // 404 → no CV on server; also covers network errors
-            if (newKey === props.job.duplicateKey) cvUploaded.value = false;
-        }
+        saveSession = saves.connect(props.job, draft, (state) => {
+            saveStatus.value = state.status;
+            jobCreateFailed.value = state.jobCreateFailed;
+            generating.value = state.generating;
+            generationDiscarded.value = state.generationDiscarded;
+            restorationFailed.value = state.restorationFailed;
+        });
+        text.value = saveSession.initialText;
+        if (props.active)
+            cvUpload.open(newKey, saveSession.ensureJob.bind(saveSession));
+        else cvUpload.close();
     },
     { immediate: true },
 );
 
-function clearUploadTimer() {
-    if (uploadTimer !== null) {
-        clearTimeout(uploadTimer);
-        uploadTimer = null;
-    }
-}
-
-function scheduleUpload() {
-    clearUploadTimer();
-    if (text.value === lastUploadedText.value) {
-        saveStatus.value = 'saved';
-        return;
-    }
-    saveStatus.value = 'pending';
-    uploadTimer = setTimeout(() => void uploadNow(), UPLOAD_DEBOUNCE_MS);
-}
-
-function shouldSkipUpload(
-    snapshot: string,
-    isCurrentJob: () => boolean,
-): boolean {
-    if (!snapshot.trim()) {
-        if (isCurrentJob()) saveStatus.value = 'idle';
-        return true;
-    }
-    return snapshot === lastUploadedText.value || uploadInFlight;
-}
-
-function needsReschedule(newKey: string, snapshot: string): boolean {
-    return (
-        newKey === props.job.duplicateKey &&
-        text.value !== snapshot &&
-        text.value !== lastUploadedText.value
-    );
-}
-
-async function createJobIfNeeded(job: ScrapedJob): Promise<boolean> {
-    if (jobDbCreationState.get(job.duplicateKey) === 'saved') return true;
-    try {
-        await postJson('/jobs/create', { job, like: true });
-        jobDbCreationState.set(job.duplicateKey, 'saved');
-        if (job.duplicateKey === props.job.duplicateKey)
-            jobCreateFailed.value = false;
-        return true;
-    } catch (error) {
-        jobDbCreationState.set(job.duplicateKey, 'failed');
-        if (job.duplicateKey === props.job.duplicateKey) {
-            jobCreateFailed.value = true;
-            saveStatus.value = 'error';
+watch(
+    () => props.active,
+    (active) => {
+        if (active && saveSession) {
+            cvUpload.open(
+                props.job.duplicateKey,
+                saveSession.ensureJob.bind(saveSession),
+            );
+        } else {
+            cvUpload.close();
+            generationEpoch++;
+            cancelDocumentDownload();
         }
-        console.error(
-            'Failed to create job in database:',
-            error instanceof Error ? error.message : String(error),
-        );
-        return false;
-    }
-}
+    },
+);
 
-async function uploadNow(
-    newKey: string = props.job.duplicateKey,
-    snapshot: string = text.value,
-    jobForCreation: ScrapedJob = props.job,
-) {
-    clearUploadTimer();
-    const isCurrentJob = () => newKey === props.job.duplicateKey;
-    if (shouldSkipUpload(snapshot, isCurrentJob)) return;
-    uploadInFlight = true;
-    try {
-        const jobCreated = await createJobIfNeeded(jobForCreation);
-        if (!jobCreated) return;
-        if (isCurrentJob()) saveStatus.value = 'saving';
-        await postJson('/cover-letters/upload/text', {
-            coverLetterText: snapshot,
-            jobDuplicateKey: newKey,
-        });
-        if (isCurrentJob()) {
-            lastUploadedText.value = snapshot;
-            saveStatus.value = 'saved';
-        }
-    } catch (error) {
-        if (isCurrentJob()) saveStatus.value = 'error';
-        console.error(
-            'Failed to upload cover letter:',
-            error instanceof Error ? error.message : String(error),
-        );
-    } finally {
-        uploadInFlight = false;
-        if (needsReschedule(newKey, snapshot)) scheduleUpload();
-    }
-}
-
-function onChange(v: string) {
+function storeDraftLocally(v: string) {
     text.value = v;
     try {
         window.localStorage.setItem(storageKey.value, v);
     } catch {
         /* ignore */
     }
-    scheduleUpload();
+}
+
+function onChange(v: string) {
+    if (!saveSession) return;
+    storeDraftLocally(v);
+    saveSession.update(v);
 }
 
 function handleBack() {
@@ -254,45 +197,117 @@ function handleBack() {
         abortRevision();
         view.value = 'menu';
     } else {
-        void uploadNow();
+        cvUpload.close();
+        generationEpoch++;
+        cancelDocumentDownload();
+        void saveSession?.flush();
         emit('back');
     }
 }
 
-async function onCvFileSelected(file: File) {
-    const keyAtStart = props.job.duplicateKey;
-    const jobAtStart = props.job;
-    const jobCreated = await createJobIfNeeded(jobAtStart);
-    if (!jobCreated || keyAtStart !== props.job.duplicateKey) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('jobDuplicateKey', keyAtStart);
-    try {
-        await postFormData('/cv/upload', formData);
-        if (keyAtStart === props.job.duplicateKey) cvUploaded.value = true;
-    } catch (error) {
-        console.error(
-            'Failed to upload CV:',
-            error instanceof Error ? error.message : error,
-        );
+function cancelDocumentDownload() {
+    documentRequest = null;
+    downloadStatus.value = null;
+    downloadError.value = null;
+    retryDocumentKind = null;
+    applicationDownload.abort();
+    coverLetterDownload.abort();
+}
+
+function isCurrentDocumentRequest(request: DocumentRequest): boolean {
+    return (
+        documentRequest === request &&
+        props.active &&
+        saveSession === request.session &&
+        props.job.duplicateKey === request.key
+    );
+}
+
+function fetchDocument(request: DocumentRequest) {
+    const downloader =
+        request.kind === 'application'
+            ? applicationDownload
+            : coverLetterDownload;
+    const route =
+        request.kind === 'application' ? '/application/' : '/cover-letters/';
+    return downloader.run(
+        (signal) => getBlob(route + request.key, signal),
+        request.kind + '-' + request.key.replace(/:/g, '-') + '.pdf',
+    );
+}
+
+async function prepareDocumentJob(request: DocumentRequest): Promise<boolean> {
+    const created = await request.session.ensureJob();
+    if (!isCurrentDocumentRequest(request)) return false;
+    if (!created) {
+        downloadError.value =
+            'Could not save the job needed for this PDF. Please try again.';
+    }
+    return created;
+}
+
+async function saveAndDownloadDocument(request: DocumentRequest) {
+    if (!(await prepareDocumentJob(request))) return;
+    while (isCurrentDocumentRequest(request)) {
+        const requestedText = text.value;
+        if (!requestedText.trim()) {
+            downloadError.value = 'Write a cover letter before downloading it.';
+            return;
+        }
+        const saved = await request.session.flush();
+        if (!isCurrentDocumentRequest(request)) return;
+        if (saveStatus.value === 'error') {
+            downloadError.value =
+                'Could not save the latest cover letter. Please try again.';
+            return;
+        }
+        // A newer edit may still be debounced when the older write settles.
+        // Flush that revision too, and never use a false result as an acknowledgement.
+        if (
+            !saved ||
+            text.value !== requestedText ||
+            saveStatus.value !== 'saved'
+        )
+            continue;
+
+        downloadStatus.value = 'Downloading PDF…';
+        await fetchDocument(request);
+        return;
     }
 }
 
-async function downloadCoverLetter() {
+async function downloadDocument(kind: DocumentKind) {
+    if (documentRequest || !saveSession || !props.active) return;
+    const request = { kind, key: props.job.duplicateKey, session: saveSession };
+    documentRequest = request;
+    retryDocumentKind = kind;
+    downloadError.value = null;
+    downloadStatus.value = 'Saving latest cover letter…';
     try {
-        await coverLetterDownload.run(
-            (signal) =>
-                getBlob('/cover-letters/' + props.job.duplicateKey, signal),
-            'cover-letter-' +
-                props.job.duplicateKey.replace(/:/g, '-') +
-                '.pdf',
-        );
+        await saveAndDownloadDocument(request);
     } catch (error) {
+        if (!isCurrentDocumentRequest(request)) return;
+        downloadError.value = 'Could not download the PDF. Please try again.';
         console.error(
-            'Failed to download cover letter:',
+            kind === 'application'
+                ? 'Failed to download application:'
+                : 'Failed to download cover letter:',
             error instanceof Error ? error.message : String(error),
         );
+    } finally {
+        if (isCurrentDocumentRequest(request)) {
+            documentRequest = null;
+            downloadStatus.value = null;
+        }
     }
+}
+
+function downloadCoverLetter() {
+    return downloadDocument('cover-letter');
+}
+
+function retryDocumentDownload() {
+    if (retryDocumentKind) void downloadDocument(retryDocumentKind);
 }
 
 async function downloadCv() {
@@ -313,20 +328,7 @@ async function downloadCv() {
 // "Download application" downloads that one document instead.
 async function downloadApplication() {
     if (letterDone.value && cvUploaded.value) {
-        try {
-            await applicationDownload.run(
-                (signal) =>
-                    getBlob('/application/' + props.job.duplicateKey, signal),
-                'application-' +
-                    props.job.duplicateKey.replace(/:/g, '-') +
-                    '.pdf',
-            );
-        } catch (error) {
-            console.error(
-                'Failed to download application:',
-                error instanceof Error ? error.message : String(error),
-            );
-        }
+        await downloadDocument('application');
     } else if (letterDone.value) {
         await downloadCoverLetter();
     } else if (cvUploaded.value) {
@@ -335,40 +337,48 @@ async function downloadApplication() {
 }
 
 onBeforeUnmount(() => {
-    if (uploadTimer !== null) {
-        void uploadNow();
-    }
-    applicationDownload.abort();
-    coverLetterDownload.abort();
+    cvUpload.close();
+    cancelDocumentDownload();
+    saveSession?.close();
+    saveSession = null;
     cvDownload.abort();
     abortRevision();
 });
 
-const generating = ref(false);
-
 async function generateCoverLetter() {
-    if (generating.value || revising.value) return;
+    if (generating.value || revising.value || !saveSession || !props.active)
+        return;
     resetRevision();
-    generating.value = true;
+    const session = saveSession;
+    const epoch = generationEpoch;
     const keyAtStart = props.job.duplicateKey;
     // The endpoint never used the embedding — strip it from the request body.
     const { embedding, ...jobData } = props.job;
     void embedding;
     try {
-        const { coverLetter } = await postJson<{ coverLetter: string }>(
-            '/cover-letters/create/text',
-            jobData,
+        await session.generate(
+            () =>
+                postJson<GeneratedCoverLetter>(
+                    '/cover-letters/create/text',
+                    jobData,
+                ),
+            storeDraftLocally,
+            () =>
+                props.active &&
+                epoch === generationEpoch &&
+                session === saveSession &&
+                keyAtStart === props.job.duplicateKey,
         );
-        if (keyAtStart !== props.job.duplicateKey) return;
-        onChange(coverLetter);
     } catch (error) {
         console.error(
             'Failed to generate cover letter:',
             error instanceof Error ? error.message : String(error),
         );
-    } finally {
-        generating.value = false;
     }
+}
+
+function retryDraftSave() {
+    void saveSession?.flush();
 }
 
 async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
@@ -427,7 +437,8 @@ async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
                 draftAtStart.slice(selection.end),
         );
     } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (error instanceof DOMException && error.name === 'AbortError')
+            return;
         revisionError.value = 'Could not revise this text. Please try again.';
         console.error(
             'Failed to revise cover letter selection:',
@@ -474,13 +485,39 @@ const statusLabel = computed(() => {
             @back="handleBack"
         />
 
+        <div
+            v-if="downloadStatus || downloadError"
+            class="editor__download-notice"
+        >
+            <p v-if="downloadStatus" role="status">{{ downloadStatus }}</p>
+            <p v-if="downloadError" role="alert">{{ downloadError }}</p>
+            <button
+                v-if="downloadError"
+                type="button"
+                class="editor__download-retry"
+                @click="retryDocumentDownload"
+            >
+                Try download again
+            </button>
+        </div>
+
+        <GenerationNotice
+            :discarded="generationDiscarded"
+            :restoration-failed="restorationFailed"
+            :has-text="letterDone"
+            @retry="retryDraftSave"
+        />
+
         <!-- Application Editor menu -->
         <ApplicationEditorMenu
             v-if="view === 'menu'"
             :letter-done="letterDone"
             :cv-uploaded="cvUploaded"
+            :cv-upload-notice="cvUploadNotice"
+            :document-download-busy="documentDownloadBusy"
             @open-letter="view = 'letter'"
-            @file-selected="onCvFileSelected"
+            @file-selected="cvUpload.select"
+            @retry-cv-upload="cvUpload.retry"
             @download="downloadApplication"
             @download-cover-letter="downloadCoverLetter"
             @download-cv="downloadCv"
@@ -511,5 +548,24 @@ const statusLabel = computed(() => {
     display: flex;
     flex-direction: column;
     background: var(--background-color);
+}
+.editor__download-notice {
+    padding: 12px 18px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-color);
+}
+.editor__download-notice p {
+    margin: 0;
+}
+.editor__download-retry {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
 }
 </style>

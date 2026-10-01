@@ -1,4 +1,18 @@
 .match-page {
+    --rating-recovery-height: 96px;
+    --rating-recovery-space: 0px;
+    --scrape-progress-space: 0px;
+    --job-card-height: min(
+        695px,
+        calc(
+            100svh - var(--match-top-padding) - var(--match-bottom-padding) -
+                var(--match-bottom-safe-area) - var(--match-card-control-gap) -
+                var(--like-container-height) - var(--brandbar-height) -
+                var(--match-card-control-gap) - var(--match-filter-height) -
+                var(--match-card-control-gap) - var(--scrape-progress-space) -
+                var(--rating-recovery-space)
+        )
+    );
     position: relative;
     box-sizing: border-box;
     display: flex;
@@ -13,16 +27,14 @@
 }
 
 .match-page--scraping-with-jobs {
-    --job-card-height: min(
-        695px,
-        calc(
-            100svh - var(--match-top-padding) - var(--match-bottom-padding) -
-                var(--match-bottom-safe-area) - var(--match-card-control-gap) -
-                var(--like-container-height) - var(--brandbar-height) -
-                var(--match-card-control-gap) - var(--scrape-progress-height) -
-                var(--match-card-control-gap) - var(--match-filter-height) -
-                var(--match-card-control-gap)
-        )
+    --scrape-progress-space: calc(
+        var(--scrape-progress-height) + var(--match-card-control-gap)
+    );
+}
+
+.match-page--rating-recovery {
+    --rating-recovery-space: calc(
+        var(--rating-recovery-height) + var(--match-card-control-gap)
     );
 }
 

@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { CoverLetterAction } from '@/components/coverLetter';
 import CvFileInput from '@/components/CvFileInput.vue';
+import CvUploadNotice from './CvUploadNotice.vue';
+import type { CvUploadNotice as CvUploadState } from '@/lib/cvUpload';
 
-defineProps<{ letterDone: boolean; cvUploaded: boolean }>();
+withDefaults(
+    defineProps<{
+        letterDone: boolean;
+        cvUploaded: boolean;
+        cvUploadNotice?: CvUploadState | null;
+        documentDownloadBusy?: boolean;
+    }>(),
+    { documentDownloadBusy: false },
+);
 defineEmits<{
     openLetter: [];
     fileSelected: [file: File];
     download: [];
     downloadCoverLetter: [];
     downloadCv: [];
+    retryCvUpload: [];
 }>();
 </script>
 
@@ -21,6 +32,7 @@ defineEmits<{
 
         <CoverLetterAction
             :done="letterDone"
+            :download-busy="documentDownloadBusy"
             @click="$emit('openLetter')"
             @download="$emit('downloadCoverLetter')"
         />
@@ -31,10 +43,18 @@ defineEmits<{
             @download="$emit('downloadCv')"
         />
 
+        <CvUploadNotice
+            v-if="cvUploadNotice"
+            :notice="cvUploadNotice"
+            :uploaded="cvUploaded"
+            @retry="$emit('retryCvUpload')"
+        />
+
         <button
             type="button"
             class="cl-download"
-            :disabled="!letterDone && !cvUploaded"
+            :disabled="documentDownloadBusy || (!letterDone && !cvUploaded)"
+            :aria-busy="documentDownloadBusy"
             @click="$emit('download')"
         >
             Download application

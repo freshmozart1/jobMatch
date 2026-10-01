@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onMounted,
+    onUnmounted,
+    provide,
+    ref,
+    watch,
+} from 'vue';
 import {
     BrandBar,
     CancelScrapeButton,
@@ -16,11 +24,26 @@ import MatchError from './MatchError.vue';
 import ScrapeProgressStatus from './ScrapeProgressStatus.vue';
 import SearchPage from './SearchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { postJson, postJsonEventStream } from '@/lib/api';
+import { postJsonEventStream } from '@/lib/api';
+import { createRatingSaves } from '@/lib/ratingSaves';
+import RatingSaveStatus from './RatingSaveStatus.vue';
 import { DEFAULT_DATE_POSTED } from './searchParams';
+import {
+    coverLetterSavesKey,
+    createCoverLetterSaves,
+} from '@/lib/coverLetterSaves';
 import type { ScrapeProgressFrame, ScrapeStreamFrame } from './scrapeStream';
 
+provide(coverLetterSavesKey, createCoverLetterSaves());
+
 const jobs = ref<ScrapedJob[]>([]);
+const consumedJobKeys = ref(new Set<string>());
+const {
+    recoveries,
+    enqueue: saveRating,
+    retry: retryRating,
+    keys: ratingKeys,
+} = createRatingSaves();
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 const scrapeCancelled = ref(false);
@@ -46,12 +69,12 @@ const dialogActive = computed(
     () => activeJob.value !== null || searchDialogActive.value,
 );
 const visibleJobs = computed(() =>
-    matchFilterOn.value
-        ? jobs.value.filter(
-              (job) =>
-                  Math.round((job.match ?? 0) * 100) >= matchThreshold.value,
-          )
-        : jobs.value,
+    jobs.value.filter(
+        (job) =>
+            !consumedJobKeys.value.has(job.duplicateKey) &&
+            (!matchFilterOn.value ||
+                Math.round((job.match ?? 0) * 100) >= matchThreshold.value),
+    ),
 );
 const progressLabel = computed(() => {
     const progress = latestProgress.value;
@@ -336,15 +359,10 @@ function handleDialogKeydown(event: KeyboardEvent): void {
     }
 }
 
-async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
-    try {
-        await postJson('/jobs/create', { job, like });
-    } catch (error) {
-        console.error(
-            'Failed to create job:',
-            error instanceof Error ? error.message : error,
-        );
-    }
+function rateJob(job: ScrapedJob, like: boolean): void {
+    if (consumedJobKeys.value.has(job.duplicateKey)) return;
+    consumedJobKeys.value.add(job.duplicateKey);
+    saveRating(job, like);
 }
 
 let scrapeGeneration = 0;
@@ -439,6 +457,8 @@ async function fetchJobs(): Promise<void> {
     const signal = scrapeAbortController.signal;
     isLoading.value = true;
     jobs.value = [];
+    // Outstanding choices survive a new scrape and cannot be rated again there.
+    consumedJobKeys.value = new Set(ratingKeys());
     errorMessage.value = null;
     saveScrapeError(null);
     scrapeCancelled.value = false;
@@ -529,11 +549,13 @@ watch(searchOpen, (open) => {
         :class="[
             'match-page',
             { 'match-page--scraping-with-jobs': isLoading && jobs.length > 0 },
+            { 'match-page--rating-recovery': recoveries.length > 0 },
         ]"
         tabindex="-1"
         :inert="dialogActive || undefined"
     >
         <BrandBar />
+        <RatingSaveStatus :ratings="recoveries" @retry="retryRating" />
 
         <MatchEmpty
             v-if="!matchEnabled"
@@ -601,7 +623,7 @@ watch(searchOpen, (open) => {
                     :is-loading="isLoading"
                     loading-label="Waiting for more jobs…"
                     :application-editor-open="applicationEditorOpen"
-                    @like="createJob"
+                    @like="rateJob"
                     @edit="openApplicationEditor"
                     @cancel="cancelScrape"
                 />
@@ -621,6 +643,7 @@ watch(searchOpen, (open) => {
         <ApplicationEditorPage
             v-if="activeJob"
             :job="activeJob"
+            :active="applicationEditorOpen"
             @back="closeApplicationEditor"
         />
     </div>
