@@ -27,7 +27,15 @@ to be running for jobMatch to do anything. See
   Swiped job keys stay dismissed for the current search even when the match
   filter or threshold changes. Lowering the threshold can reveal unseen jobs,
   and new streamed jobs remain available. Starting a fresh search resets this
-  history; changing only the match filter does not.
+  history; changing only the match filter does not. If a rating cannot be
+  confirmed, a notice keeps the original job and Like/Dislike choice with a
+  retry button. Retries do not rescrape or repeat a request already in flight.
+  Pending and failed choices survive filter changes and new searches within
+  the open page, and their jobs stay dismissed until recovery. The recovery
+  queue is held in memory and ends when the page is closed or reloaded.
+  A lost response can follow a successful write; retry sends the identical
+  job/rating to the backend's `duplicateKey` upsert instead of claiming that
+  only one HTTP request ever reached the server.
 - **Search** — up to five keywords plus a city, a search radius in kilometres
   and a "date posted" window (past 24 hours / week / month)
   (`src/pages/match/SearchPage.vue`). Everything is persisted in `localStorage`,
