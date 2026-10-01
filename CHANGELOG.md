@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.9
+
+### Fixed
+
+- Escape now dismisses the selected-text revision form before closing the
+  Application Editor, returning focus to the draft and then its launcher on the
+  next Escape. Pending revisions can be cancelled, and late responses are
+  ignored. Outer menu/letter and Search Escape plus focus trapping remain
+  available (#104).
+
 ## v0.5.8
 
 ### Fixed

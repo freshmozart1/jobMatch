@@ -761,6 +761,99 @@ test('downloads acknowledged generation after reopening without re-segmenting it
     expect(storedSegments).toBe(originalSegments);
 });
 
+async function openKeyboardRevision(page: Page, draft: string) {
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/cover-letters/upload/text', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    await page.evaluate(({ key, draft }) => localStorage.setItem(key, draft), {
+        key: `jobmatch.coverletter.${mockJob.duplicateKey}`,
+        draft,
+    });
+    await page
+        .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+        .click();
+    const dialog = page.locator(`#${APPLICATION_EDITOR_DIALOG_ID}`);
+    await dialog.locator('.cl-action__row').first().click();
+    const textarea = dialog.locator('.cl-textarea');
+    await expect(textarea).toHaveValue(draft);
+    await textarea.focus();
+    await textarea.press('ControlOrMeta+A');
+    const form = dialog.locator('.cl-revision');
+    await expect(form).toBeVisible();
+    const instruction = form.getByLabel('How should AI revise this selection?');
+    await instruction.fill('Make it more confident.');
+    return { dialog, textarea, form, instruction };
+}
+
+for (const target of ['instruction', 'textarea'] as const) {
+    test(`Escape from revision ${target} dismisses the inner form before the editor`, async ({
+        page,
+    }) => {
+        const draft = 'A synthetic cover letter for keyboard testing.';
+        const { dialog, textarea, form, instruction } =
+            await openKeyboardRevision(page, draft);
+        await (target === 'instruction' ? instruction : textarea).press(
+            'Escape',
+        );
+        await expect(form).toHaveCount(0);
+        await expect(dialog).toBeVisible();
+        await expect(textarea).toBeFocused();
+        await expect(textarea).toHaveValue(draft);
+        await textarea.press('Escape');
+        await expect(dialog).toBeHidden();
+        await expect(
+            page.getByRole('button', {
+                name: `Open ${APPLICATION_EDITOR_NAME}`,
+            }),
+        ).toBeFocused();
+    });
+}
+
+test('Escape cancels a pending revision and allows a new keyboard-selected revision', async ({
+    page,
+}) => {
+    let requests = 0;
+    await page.route('**/cover-letters/revise/text', async (route) => {
+        requests++;
+        if (requests > 1)
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    replacementText: 'The current revision.',
+                }),
+            });
+    });
+    const draft = 'A synthetic draft before cancellation.';
+    const { dialog, textarea, form, instruction } = await openKeyboardRevision(
+        page,
+        draft,
+    );
+    const sent = page.waitForRequest('**/cover-letters/revise/text');
+    await form.getByRole('button', { name: 'Apply' }).click();
+    await sent;
+    const cancel = form.getByRole('button', { name: 'Cancel' });
+    await expect(cancel).toBeEnabled();
+    await expect(cancel).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(form).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(textarea).toBeEnabled();
+    await expect(textarea).toBeFocused();
+    await expect(textarea).toHaveValue(draft);
+    await textarea.press('ControlOrMeta+A');
+    await expect(instruction).toHaveValue('');
+    await instruction.fill('Try a new revision.');
+    await form.getByRole('button', { name: 'Apply' }).click();
+    await expect(textarea).toHaveValue('The current revision.');
+    await expect(form).toHaveCount(0);
+    expect(requests).toBe(2);
+});
+
 test('revises the exact selected cover-letter range through the released server contract', async ({
     page,
 }) => {

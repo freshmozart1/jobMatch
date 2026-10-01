@@ -139,3 +139,19 @@ reset the native input after selection to permit choosing the same file again.
 `CvUploadRecovery.spec.ts` covers deferred upload/status/preparation and lifecycle
 races. State is editor-local; no cross-instance/tab/backend revision ordering is
 claimed, and status-fetch error UX remains a separate issue.
+
+## Nested revision Escape
+
+`MatchPage.vue` traps Tab and focusin in document capture listeners, but outer
+Escape dismissal runs in a separate bubbling listener and respects
+`defaultPrevented`. Keep listener cleanup symmetric. `CoverLetterEditor.vue`
+consumes Escape only while its revision selection form is open; the next Escape
+from the draft can then close the outer editor. Dismissal clears instruction,
+emits explicit `cancelRevision`, and restores draft focus with a collapsed caret.
+Keep Cancel enabled and focus it when revision inputs lock so the pending form
+remains keyboard-cancellable. `ApplicationEditorPage.vue` aborts on dismissal or
+deactivation and checks request controller, active state, job and original draft
+before using either a revision success or error. Cancellation does not guarantee
+that backend/model work stops; ignore late responses even when abort is ignored.
+Full-page regressions are in `NestedEscape.spec.ts` and Chromium covers actual
+keyboard selection/Escape, pending cancellation and resubmission.
