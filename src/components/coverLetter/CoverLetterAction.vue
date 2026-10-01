@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { COVER_LETTER_NAME } from '@/components/application/constants';
 
-defineProps<{ done: boolean }>();
+withDefaults(defineProps<{ done: boolean; downloadBusy?: boolean }>(), {
+    downloadBusy: false,
+});
 defineEmits<{ click: []; download: [] }>();
 </script>
 
@@ -26,7 +28,8 @@ defineEmits<{ click: []; download: [] }>();
         <button
             type="button"
             class="cl-action__dl"
-            :disabled="!done"
+            :disabled="!done || downloadBusy"
+            :aria-busy="downloadBusy"
             aria-label="Download cover letter"
             title="Download cover letter"
             @click="$emit('download')"

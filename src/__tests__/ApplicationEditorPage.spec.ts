@@ -73,6 +73,7 @@ describe('ApplicationEditorPage', () => {
     });
 
     afterEach(() => {
+        vi.restoreAllMocks();
         vi.unstubAllGlobals();
         vi.useRealTimers();
         window.localStorage.clear();
@@ -511,9 +512,7 @@ describe('ApplicationEditorPage', () => {
         ).toBe(
             (textarea.element as HTMLTextAreaElement).value.slice(start, end),
         );
-        await wrapper
-            .find('.cl-revision__instruction')
-            .setValue(instruction);
+        await wrapper.find('.cl-revision__instruction').setValue(instruction);
         await wrapper.find('.cl-revision').trigger('submit');
     }
 
@@ -549,19 +548,19 @@ describe('ApplicationEditorPage', () => {
                 (call[0] as string).includes('/cover-letters/revise/text'),
             );
             expect(revisionCall).toBeDefined();
-            expect(JSON.parse((revisionCall![1] as RequestInit).body as string)).toEqual(
-                {
-                    selectedText,
-                    instruction: 'Make it more specific and confident.',
-                    coverLetterText: draft,
-                    job: {
-                        title: job.title,
-                        company: job.company,
-                        location: job.location,
-                        description: job.descriptionText,
-                    },
+            expect(
+                JSON.parse((revisionCall![1] as RequestInit).body as string),
+            ).toEqual({
+                selectedText,
+                instruction: 'Make it more specific and confident.',
+                coverLetterText: draft,
+                job: {
+                    title: job.title,
+                    company: job.company,
+                    location: job.location,
+                    description: job.descriptionText,
                 },
-            );
+            });
 
             const updatedDraft =
                 draft.slice(0, start) +
@@ -611,12 +610,7 @@ describe('ApplicationEditorPage', () => {
             });
             const wrapper = await mountAndOpen(draft);
 
-            await submitRevision(
-                wrapper,
-                2,
-                draft.length,
-                'Make it clearer.',
-            );
+            await submitRevision(wrapper, 2, draft.length, 'Make it clearer.');
             await flushPromises();
 
             expect(
@@ -703,9 +697,7 @@ describe('ApplicationEditorPage', () => {
                             });
                         });
                     }
-                    return Promise.resolve(
-                        new Response('{}', { status: 200 }),
-                    );
+                    return Promise.resolve(new Response('{}', { status: 200 }));
                 },
             );
             const draft = 'Switching jobs';
@@ -819,12 +811,26 @@ describe('ApplicationEditorPage', () => {
         expect(urls.some((u) => u.includes('/cv/upload'))).toBe(false);
     });
 
+    // These tests exercise the PDF transfer after persistence succeeds. The
+    // ordering/failure/lifecycle of that prerequisite has deferred coverage in
+    // CoverLetterDownloadPersistence.spec.ts.
+    function acknowledgeDraftSaves() {
+        vi.stubGlobal(
+            'fetch',
+            (input: RequestInfo | URL, init?: RequestInit) =>
+                init?.method === 'POST'
+                    ? Promise.resolve(new Response('{}', { status: 200 }))
+                    : fetchMock(input, init),
+        );
+    }
+
     // --- download application ---
 
     // The combined PDF is only downloaded once both a cover letter draft and a CV
     // exist — every test in this block seeds a draft so cvUploaded (true by
     // default via the mocked CV status check) and letterDone are both true.
     describe('download application', () => {
+        beforeEach(acknowledgeDraftSaves);
         async function mountAndClickDownload() {
             seedDraft();
             const mocks = makeDownloadMocks();
@@ -901,6 +907,7 @@ describe('ApplicationEditorPage', () => {
             // second click — should be ignored
             await wrapper.find('.cl-download').trigger('click');
 
+            await flushPromises(); // allow the prerequisite save to finish
             resolveFirst();
             await flushPromises();
 
@@ -947,6 +954,7 @@ describe('ApplicationEditorPage', () => {
             await flushPromises();
 
             void wrapper.find('.cl-download').trigger('click');
+            await flushPromises(); // save finishes, PDF request remains pending
             // unmount before the fetch resolves — should abort
             wrapper.unmount();
 
@@ -996,6 +1004,7 @@ describe('ApplicationEditorPage', () => {
     });
 
     describe('download application — only one document exists', () => {
+        beforeEach(acknowledgeDraftSaves);
         it('downloads only the cover letter when a draft exists but no CV is uploaded', async () => {
             seedDraft();
             const { anchorClick, getAnchor, restore } = makeDownloadMocks();
@@ -1058,6 +1067,7 @@ describe('ApplicationEditorPage', () => {
     // --- download cover letter (per-row) ---
 
     describe('download cover letter', () => {
+        beforeEach(acknowledgeDraftSaves);
         async function mountAndClickCoverLetterDownload() {
             seedDraft();
             const mocks = makeDownloadMocks();
@@ -1121,6 +1131,7 @@ describe('ApplicationEditorPage', () => {
             void dlButton.trigger('click');
             await dlButton.trigger('click');
 
+            await flushPromises(); // allow the prerequisite save to finish
             resolveFirst();
             await flushPromises();
 
@@ -1155,6 +1166,7 @@ describe('ApplicationEditorPage', () => {
             await flushPromises();
 
             void wrapper.findAll('.cl-action__dl')[0]!.trigger('click');
+            await flushPromises(); // save finishes, PDF request remains pending
             wrapper.unmount();
 
             rejectFetch(new DOMException('Aborted', 'AbortError'));
@@ -1231,6 +1243,7 @@ describe('ApplicationEditorPage', () => {
             void dlButton.trigger('click');
             await dlButton.trigger('click');
 
+            await flushPromises(); // allow the prerequisite save to finish
             resolveFirst();
             await flushPromises();
 

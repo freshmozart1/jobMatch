@@ -1,4 +1,10 @@
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import {
+    test,
+    expect,
+    type Locator,
+    type Page,
+    type Route,
+} from '@playwright/test';
 import {
     APPLICATION_EDITOR_DIALOG_ID,
     APPLICATION_EDITOR_NAME,
@@ -372,6 +378,74 @@ test('keeps Application Editor focus modal, restores its launcher, and reopens c
 
     await expect(editor).toBeVisible();
     await expect(heading).toBeFocused();
+});
+
+test('saves the latest draft before an application download and retries a failed save', async ({
+    page,
+}) => {
+    const uploads: Route[] = [];
+    const downloadedDrafts: string[] = [];
+    const draft = 'The latest synthetic application draft.';
+    let persistedDraft = '';
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/cover-letters/upload/text', (route) => {
+        uploads.push(route);
+    });
+    await page.route('**/application/*', async (route) => {
+        downloadedDrafts.push(persistedDraft);
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/pdf',
+            body: '%PDF-synthetic',
+        });
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    await page.route('**/cv/*/status', async (route) => {
+        await route.fulfill({ status: 200, body: '{}' });
+    });
+    await page.evaluate(
+        ({ key, draft }) => window.localStorage.setItem(key, draft),
+        { key: `jobmatch.coverletter.${mockJob.duplicateKey}`, draft },
+    );
+    await page
+        .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+        .click();
+    const editor = page.locator('.editor');
+    await expect(editor).toContainText('PDF attached');
+    const download = editor.getByRole('button', {
+        name: 'Download application',
+    });
+    await download.click();
+    await expect(editor.getByRole('status')).toHaveText(
+        'Saving latest cover letter…',
+    );
+    await expect(download).toBeDisabled();
+    await expect(
+        editor.getByRole('button', { name: 'Download cover letter' }),
+    ).toBeDisabled();
+    await expect.poll(() => uploads.length).toBe(1);
+    expect(downloadedDrafts).toEqual([]);
+    await uploads[0].fulfill({ status: 500, body: 'Synthetic save failure' });
+    await expect(editor.getByRole('alert')).toContainText(
+        'Could not save the latest cover letter',
+    );
+    expect(downloadedDrafts).toEqual([]);
+
+    await editor.getByRole('button', { name: 'Try download again' }).click();
+    await expect.poll(() => uploads.length).toBe(2);
+    expect(downloadedDrafts).toEqual([]);
+    const retry = uploads[1];
+    persistedDraft = retry.request().postDataJSON().coverLetterText;
+    const downloaded = page.waitForEvent('download');
+    await retry.fulfill({ status: 201, body: '{}' });
+    expect((await downloaded).suggestedFilename()).toBe(
+        'application-example-mobile-layout-test.pdf',
+    );
+    expect(downloadedDrafts).toEqual([draft]);
+    await expect(editor.getByRole('alert')).toHaveCount(0);
+    await expect(download).toBeEnabled();
 });
 
 test('revises the exact selected cover-letter range through the released server contract', async ({

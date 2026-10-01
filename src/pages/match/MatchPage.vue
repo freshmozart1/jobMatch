@@ -635,6 +635,7 @@ watch(searchOpen, (open) => {
         <ApplicationEditorPage
             v-if="activeJob"
             :job="activeJob"
+            :active="applicationEditorOpen"
             @back="closeApplicationEditor"
         />
     </div>
