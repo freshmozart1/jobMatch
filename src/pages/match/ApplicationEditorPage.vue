@@ -7,6 +7,7 @@ import {
     createCoverLetterSaves,
 } from '@/lib/coverLetterSaves';
 import { CoverLetterEditor } from '@/components/coverLetter';
+import GenerationNotice from '@/components/application/GenerationNotice.vue';
 import type { CoverLetterRevisionSelection } from '@/components/coverLetter';
 import {
     APPLICATION_EDITOR_NAME,
@@ -51,6 +52,10 @@ const saveStatus = ref<'idle' | 'pending' | 'saving' | 'saved' | 'error'>(
     'idle',
 );
 const jobCreateFailed = ref(false);
+const generating = ref(false);
+const generationDiscarded = ref(false);
+const restorationFailed = ref(false);
+let generationEpoch = 0;
 
 type DocumentKind = 'cover-letter' | 'application';
 type DocumentRequest = {
@@ -127,6 +132,7 @@ const cvDownload = createBlobDownload();
 watch(
     () => props.job.duplicateKey,
     async (newKey) => {
+        generationEpoch++;
         cancelDocumentDownload();
         abortRevision();
         saveSession?.close();
@@ -140,6 +146,9 @@ watch(
         saveSession = saves.connect(props.job, draft, (state) => {
             saveStatus.value = state.status;
             jobCreateFailed.value = state.jobCreateFailed;
+            generating.value = state.generating;
+            generationDiscarded.value = state.generationDiscarded;
+            restorationFailed.value = state.restorationFailed;
         });
         text.value = saveSession.initialText;
         try {
@@ -156,7 +165,10 @@ watch(
 watch(
     () => props.active,
     (active) => {
-        if (!active) cancelDocumentDownload();
+        if (!active) {
+            generationEpoch++;
+            cancelDocumentDownload();
+        }
     },
 );
 
@@ -176,6 +188,7 @@ function handleBack() {
         abortRevision();
         view.value = 'menu';
     } else {
+        generationEpoch++;
         cancelDocumentDownload();
         void saveSession?.flush();
         emit('back');
@@ -328,31 +341,40 @@ onBeforeUnmount(() => {
     abortRevision();
 });
 
-const generating = ref(false);
-
 async function generateCoverLetter() {
-    if (generating.value || revising.value) return;
+    if (generating.value || revising.value || !saveSession || !props.active)
+        return;
     resetRevision();
-    generating.value = true;
+    const session = saveSession;
+    const epoch = generationEpoch;
     const keyAtStart = props.job.duplicateKey;
     // The endpoint never used the embedding — strip it from the request body.
     const { embedding, ...jobData } = props.job;
     void embedding;
     try {
-        const { coverLetter } = await postJson<{ coverLetter: string }>(
-            '/cover-letters/create/text',
-            jobData,
+        await session.generate(
+            () =>
+                postJson<{ coverLetter: string }>(
+                    '/cover-letters/create/text',
+                    jobData,
+                ),
+            onChange,
+            () =>
+                props.active &&
+                epoch === generationEpoch &&
+                session === saveSession &&
+                keyAtStart === props.job.duplicateKey,
         );
-        if (keyAtStart !== props.job.duplicateKey) return;
-        onChange(coverLetter);
     } catch (error) {
         console.error(
             'Failed to generate cover letter:',
             error instanceof Error ? error.message : String(error),
         );
-    } finally {
-        generating.value = false;
     }
+}
+
+function retryDraftSave() {
+    void saveSession?.flush();
 }
 
 async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
@@ -474,6 +496,13 @@ const statusLabel = computed(() => {
                 Try download again
             </button>
         </div>
+
+        <GenerationNotice
+            :discarded="generationDiscarded"
+            :restoration-failed="restorationFailed"
+            :has-text="letterDone"
+            @retry="retryDraftSave"
+        />
 
         <!-- Application Editor menu -->
         <ApplicationEditorMenu

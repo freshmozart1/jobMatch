@@ -66,3 +66,15 @@ snapshot and an active-request guard across awaits; `active` becomes false as
 soon as the editor closes, before its exit transition unmounts it. Failed saves
 must show a retry action and must not request a stale PDF. Deferred download
 regressions live in `src/__tests__/CoverLetterDownloadPersistence.spec.ts`.
+
+Generation is a per-job coordinator transaction too. It captures the draft
+revision before waiting for previous uploads and retains the entry while its
+provider response or restoration is pending. The endpoint persists before it
+responds: discard stale UI output AND invalidate savedText/restore the latest
+manual draft, including same-text edits. Detached sessions cannot apply results;
+reopened sessions inherit pending generation state. A failed restoration retains
+its entry for retry. Empty drafts cannot be uploaded by the current server API;
+report unsaved state instead of acknowledging them. Use the persisted-state
+fixtures in `CoverLetterGenerationPersistence.spec.ts` for these races. This is
+page-local ordering, not cross-tab or backend revision control. Normal accepted
+generation still follows the existing debounced upload (#105 is separate).

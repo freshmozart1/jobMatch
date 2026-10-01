@@ -448,6 +448,60 @@ test('saves the latest draft before an application download and retries a failed
     await expect(download).toBeEnabled();
 });
 
+test('keeps manual edits when generation finishes and restores the server draft', async ({
+    page,
+}) => {
+    const generations: Route[] = [];
+    const uploads: Route[] = [];
+    let storedDraft = '';
+    const manualDraft = 'The manual draft written while AI was working.';
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/cover-letters/create/text', (route) => {
+        generations.push(route);
+    });
+    await page.route('**/cover-letters/upload/text', (route) => {
+        uploads.push(route);
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    await page
+        .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+        .click();
+    await page.locator('.cl-action__row').first().click();
+    await page.locator('.cl-generate').click();
+    await expect.poll(() => generations.length).toBe(1);
+    const textarea = page.locator('.cl-textarea');
+    await textarea.fill(manualDraft);
+    expect(uploads).toHaveLength(0);
+    storedDraft = 'Generated from older context';
+    await generations[0].fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ coverLetter: storedDraft, saved: true }),
+    });
+    await expect(textarea).toHaveValue(manualDraft);
+    await expect(page.locator('.editor')).toContainText(
+        'generated text was discarded',
+    );
+    await expect.poll(() => uploads.length).toBe(1);
+    expect(uploads[0].request().postDataJSON().coverLetterText).toBe(
+        manualDraft,
+    );
+    storedDraft = uploads[0].request().postDataJSON().coverLetterText;
+    await uploads[0].fulfill({ status: 201, body: '{}' });
+    await expect(page.locator('.editor .cl-meta')).toContainText(
+        'Saved to server',
+    );
+    expect(storedDraft).toBe(manualDraft);
+    expect(
+        await page.evaluate(
+            (key) => localStorage.getItem(key),
+            `jobmatch.coverletter.${mockJob.duplicateKey}`,
+        ),
+    ).toBe(manualDraft);
+});
+
 test('revises the exact selected cover-letter range through the released server contract', async ({
     page,
 }) => {

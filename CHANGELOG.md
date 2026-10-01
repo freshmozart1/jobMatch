@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.4
+
+### Fixed
+
+- AI generation no longer overwrites edits made while it runs. Generation and
+  uploads share a per-job queue; stale or closed-editor results are discarded
+  and the latest manual draft is restored on the server. Reopened editors join
+  pending generation, and a failed restoration offers a save retry. Cleared
+  drafts stay local with an explicit unsaved message because the server cannot
+  store an empty letter (#99).
+
 ## v0.5.3
 
 ### Fixed

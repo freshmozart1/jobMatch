@@ -85,6 +85,16 @@ to be running for jobMatch to do anything. See
   open app page; separate tabs or devices still require server-side revision
   handling. `ApplicationEditorPage.vue` connects the editor to this queue;
   `src/components/coverLetter/CoverLetterEditor.vue` is presentational.
+  Generation joins the same per-job queue: it waits for an older upload and
+  holds newer uploads until the response arrives. You can keep typing while AI
+  works. If you edit, close the editor, or switch jobs, the generated response
+  is discarded and the current draft is restored on the server, because the
+  generation endpoint saves its result before replying. A failed restoration
+  shows a save retry action, including after reopening the editor. Empty letters
+  cannot be stored by the current server API: cleared text stays local and the
+  editor asks you to add text before retrying. This ordering covers one page's
+  editor sessions; it does not coordinate other tabs/devices or prevent a server
+  request from writing after a timeout.
 - **CV and downloads** — attach a PDF CV (`src/components/CvFileInput.vue`,
   `accept="application/pdf,.pdf"`). That component only emits the chosen file;
   `ApplicationEditorPage.vue` uploads it (`POST /cv/upload`) and checks presence
