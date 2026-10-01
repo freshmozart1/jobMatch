@@ -279,6 +279,9 @@ test('keeps live progress and populated controls inside a mobile viewport', asyn
 test('keeps sticky like controls visible while swiping on compact portrait', async ({
     page,
 }) => {
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
     await loadPopulatedMatchPage(page, { width: 360, height: 640 });
 
     const card = page.locator('.job-card-stack__current .job-card');
@@ -329,6 +332,99 @@ for (const { control, expectedLike } of [
         });
     });
 }
+
+test('keeps rated jobs dismissed across match filters without skipping unseen cards', async ({
+    page,
+}) => {
+    const ratedKeys: string[] = [];
+    await page.route('**/jobs/create', async (route) => {
+        ratedKeys.push(route.request().postDataJSON().job.duplicateKey);
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    const current = page.locator('.job-card-stack__current h2');
+    await expect(current).toHaveText(mockJobs[0].title);
+    await page.getByRole('button', { name: 'Like', exact: true }).click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    const filter = page.getByRole('switch', {
+        name: 'Only show jobs at or above the minimum match',
+    });
+    await filter.click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    const threshold = page.getByRole('spinbutton', {
+        name: 'Minimum match percentage',
+    });
+    await threshold.fill('85');
+    await expect(current).toHaveCount(0);
+    await threshold.fill('80');
+    await expect(current).toHaveText(mockJobs[1].title);
+    await filter.click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    await page.getByRole('button', { name: 'Dislike', exact: true }).click();
+    await expect(current).toHaveCount(0);
+    await filter.click();
+    await expect(current).toHaveCount(0);
+    expect(ratedKeys).toEqual(mockJobs.map((job) => job.duplicateKey));
+});
+
+test('retries an offline Dislike without rescraping or changing the intended rating', async ({
+    page,
+}) => {
+    const attempts: Route[] = [];
+    let scrapeRequests = 0;
+    page.on('request', (request) => {
+        if (request.url().endsWith('/scrape/linkedin')) scrapeRequests++;
+    });
+    await page.route('**/jobs/create', async (route) => {
+        attempts.push(route);
+        if (attempts.length === 1) await route.abort('internetdisconnected');
+    });
+    await loadPopulatedMatchPage(page, { width: 360, height: 640 });
+    await page.getByRole('button', { name: 'Dislike', exact: true }).click();
+    const recovery = page.locator(
+        `[data-rating-key="${mockJob.duplicateKey}"]`,
+    );
+    await expect(recovery.getByRole('alert')).toContainText(
+        'Could not confirm Dislike',
+    );
+    await expect(recovery).toContainText(mockJob.title);
+    await expect(page.locator('.job-card-stack__current h2')).toHaveText(
+        mockJobs[1].title,
+    );
+    await page
+        .getByRole('switch', {
+            name: 'Only show jobs at or above the minimum match',
+        })
+        .click();
+    await expect(recovery).toBeVisible();
+    const controls = await page.locator('.like-container').boundingBox();
+    expect(controls).not.toBeNull();
+    expect(controls!.y + controls!.height).toBeLessThanOrEqual(640);
+    const retry = recovery.getByRole('button', {
+        name: `Retry Dislike for ${mockJob.title}`,
+    });
+    await retry.click();
+    await expect.poll(() => attempts.length).toBe(2);
+    await expect(retry).toBeDisabled();
+    await expect(recovery.getByRole('status')).toContainText(
+        'Retrying Dislike',
+    );
+    expect(attempts[1].request().postDataJSON()).toEqual({
+        job: mockJob,
+        like: false,
+    });
+    await attempts[1].fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: '{}',
+    });
+    await expect(recovery).toHaveCount(0);
+    await expect(page.locator('.job-card-stack__current h2')).toHaveText(
+        mockJobs[1].title,
+    );
+    expect(attempts).toHaveLength(2);
+    expect(scrapeRequests).toBe(1);
+});
 
 test('keeps Application Editor focus modal, restores its launcher, and reopens cleanly', async ({
     page,

@@ -88,3 +88,32 @@ re-segment unchanged generated text. PDF preparation separately ensures the job
 exists and re-checks request identity before continuing. Regression fixtures in
 `GeneratedCoverLetterAcknowledgement.spec.ts` distinguish original generated
 segments from re-segmented text and reject PDF requests lacking a job record.
+
+## Swipe history and filtered decks
+
+`MatchPage.vue` owns consumed `duplicateKey`s for one search and excludes them
+before applying the match filter. Record a committed swipe synchronously in
+`rateJob`; persistence is a separate operation. Filter changes and cancellation
+must not clear consumed keys. `fetchJobs` starts a fresh search and resets them
+alongside the streamed jobs, retaining outstanding rating keys; stream deduplication still uses duplicateKey.
+`JobCardStack.vue` is a controlled view of jobs[0]/jobs[1]: it emits ratings and
+never increments a second cursor when the parent removes a consumed job.
+Filter re-keying only resets transient gestures. Mounted stream regression
+coverage lives in `MatchConsumedJobs.spec.ts`, including hidden unseen jobs,
+new arrivals, cancellation and fresh-search reset.
+
+## Failed rating recovery
+
+`createRatingSaves()` in `src/lib/ratingSaves.ts` belongs to one MatchPage.
+Capture a deep independent job payload and boolean choice at enqueue, retain
+one pending/failed entry per duplicateKey, and set pending synchronously before
+sending. Retry only a failed entry; remove only that exact entry after a
+successful response. Filters and new searches must not clear the queue or
+replace its original payload. New-search consumed keys include outstanding
+ratings so streamed duplicates cannot overwrite a pending choice.
+`RatingSaveStatus.vue` presents failures and retry progress outside search/deck
+conditionals; its bounded height is reserved in the card layout. Fixtures in
+`RatingRecovery.spec.ts` use deferred HTTP/network failures, independent keys,
+mutable job data, new searches and ambiguous responses. Backend upsert makes
+identical retries converge by key; do not claim exactly-once HTTP after a lost
+response. The queue is page-local and does not survive reload.

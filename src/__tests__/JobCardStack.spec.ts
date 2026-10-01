@@ -47,17 +47,19 @@ describe('JobCardStack', () => {
         });
     });
 
-    it('advances the index when the top card emits a swipe', async () => {
+    it('lets the parent remove a swiped job without also advancing an internal index', async () => {
         const wrapper = mount(JobCardStack, { props: { jobs } });
 
         swipeTopCard(wrapper);
         await wrapper.vm.$nextTick();
-
+        expect(wrapper.emitted('like')).toEqual([[jobs[0], true]]);
         expect(
             wrapper.findComponent(JobCardContainer).props('job'),
-        ).toMatchObject({
-            title: 'Second',
-        });
+        ).toMatchObject({ title: 'First' });
+        await wrapper.setProps({ jobs: jobs.slice(1) });
+        expect(
+            wrapper.findComponent(JobCardContainer).props('job'),
+        ).toMatchObject({ title: 'Second' });
     });
 
     it.each([
@@ -86,6 +88,7 @@ describe('JobCardStack', () => {
             expect(Math.sign(offset)).toBe(expectedDirection);
 
             await firstCard.trigger('transitionend');
+            await wrapper.setProps({ jobs: jobs.slice(1) });
 
             expect(wrapper.emitted('like')).toEqual([[jobs[0], expectedLike]]);
             expect(
@@ -102,6 +105,7 @@ describe('JobCardStack', () => {
         await likeButton.trigger('click');
         await likeButton.trigger('click');
         await firstCard.trigger('transitionend');
+        await wrapper.setProps({ jobs: jobs.slice(1) });
 
         expect(wrapper.emitted('like')).toEqual([[jobs[0], true]]);
         expect(
@@ -113,9 +117,9 @@ describe('JobCardStack', () => {
         const wrapper = mount(JobCardStack, { props: { jobs } });
 
         swipeTopCard(wrapper);
-        await wrapper.vm.$nextTick();
+        await wrapper.setProps({ jobs: jobs.slice(1) });
         swipeTopCard(wrapper);
-        await wrapper.vm.$nextTick();
+        await wrapper.setProps({ jobs: [] });
 
         expect(wrapper.findComponent(JobCardContainer).exists()).toBe(false);
         expect(wrapper.find('.job-card-stack__empty').text()).toBe(
@@ -159,9 +163,9 @@ describe('JobCardStack', () => {
         });
 
         swipeTopCard(wrapper);
-        await wrapper.vm.$nextTick();
+        await wrapper.setProps({ jobs: jobs.slice(1) });
         swipeTopCard(wrapper);
-        await wrapper.vm.$nextTick();
+        await wrapper.setProps({ jobs: [] });
 
         expect(wrapper.find('.scrape-cancel').exists()).toBe(true);
     });
