@@ -76,8 +76,14 @@ to be running for jobMatch to do anything. See
   (the menu shows no job; the letter view does). Drafts
   save to `localStorage` immediately and upload to the server after a 3s typing
   pause (`POST /cover-letters/upload/text`) — and also when you leave the
-  editor, swipe to another card, or the page unmounts. Both live in
-  `ApplicationEditorPage.vue`;
+  editor, swipe to another card, or the page unmounts. A per-job save queue in
+  `src/lib/coverLetterSaves.ts` belongs to the match page and survives closing
+  and reopening the Application Editor. Only one draft upload per job runs at
+  a time; a newer edit replaces any draft still waiting to upload, and
+  “Saved to server” refers to the current draft. Closing detaches the editor's
+  status listener while its pending save finishes. The queue coordinates one
+  open app page; separate tabs or devices still require server-side revision
+  handling. `ApplicationEditorPage.vue` connects the editor to this queue;
   `src/components/coverLetter/CoverLetterEditor.vue` is presentational.
 - **CV and downloads** — attach a PDF CV (`src/components/CvFileInput.vue`,
   `accept="application/pdf,.pdf"`). That component only emits the chosen file;

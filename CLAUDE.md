@@ -47,3 +47,14 @@ positions, while failed/dropped counts are summed for the user-facing warning.
 - API calls in tests are hardcoded to `http://localhost:3000`
 - Run a single browser: `npm run test:e2e -- --project=chromium`
 - Debug mode: `npm run test:e2e -- --debug`
+
+## Cover-letter save lifecycle
+
+`MatchPage.vue` provides a `createCoverLetterSaves()` coordinator from
+`src/lib/coverLetterSaves.ts`. Keep debounce timers, in-flight writes and the
+latest draft revision in that per-job queue, never in a disposable editor
+instance. `ApplicationEditorPage.vue` closes its session on job change and
+unmount; session disposal removes UI listeners and flushes pending work through
+the same queue. A completed old upload must not mark a newer draft as saved.
+Regression coverage lives in `src/__tests__/CoverLetterSaveLifecycle.spec.ts`
+and uses deferred HTTP fixtures; do not exercise these races against live data.

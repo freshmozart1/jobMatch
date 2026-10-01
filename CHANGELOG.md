@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.2
+
+### Fixed
+
+- Closing and reopening the Application Editor while a cover letter was saving
+  could let an older editor overwrite a newer saved draft. A page-owned,
+  per-job queue now serializes uploads, keeps only the newest waiting revision,
+  and removes closed editors' status listeners. The save indicator reports
+  completion only for the current draft (#100).
+
 ## v0.5.1
 
 ### Fixed

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onMounted,
+    onUnmounted,
+    provide,
+    ref,
+    watch,
+} from 'vue';
 import {
     BrandBar,
     CancelScrapeButton,
@@ -18,7 +26,13 @@ import SearchPage from './SearchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 import { postJson, postJsonEventStream } from '@/lib/api';
 import { DEFAULT_DATE_POSTED } from './searchParams';
+import {
+    coverLetterSavesKey,
+    createCoverLetterSaves,
+} from '@/lib/coverLetterSaves';
 import type { ScrapeProgressFrame, ScrapeStreamFrame } from './scrapeStream';
+
+provide(coverLetterSavesKey, createCoverLetterSaves());
 
 const jobs = ref<ScrapedJob[]>([]);
 const isLoading = ref(false);

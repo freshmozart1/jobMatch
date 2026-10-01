@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
+import {
+    coverLetterSavesKey,
+    createCoverLetterSaves,
+} from '@/lib/coverLetterSaves';
 import { CoverLetterEditor } from '@/components/coverLetter';
 import type { CoverLetterRevisionSelection } from '@/components/coverLetter';
 import {
@@ -38,16 +42,12 @@ const cvUploaded = ref(false);
 
 const letterDone = computed(() => text.value.trim().length > 0);
 
-type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
-
-// Each upload triggers segmentation + embedding calls on the server, so wait
-// for a real pause in typing before persisting.
-const UPLOAD_DEBOUNCE_MS = 3000;
-
-const saveStatus = ref<SaveStatus>('idle');
-const lastUploadedText = ref<string | null>(null);
-let uploadTimer: ReturnType<typeof setTimeout> | null = null;
-let uploadInFlight = false;
+const saves = inject(coverLetterSavesKey, createCoverLetterSaves, true);
+let saveSession: ReturnType<typeof saves.connect> | null = null;
+const saveStatus = ref<'idle' | 'pending' | 'saving' | 'saved' | 'error'>(
+    'idle',
+);
+const jobCreateFailed = ref(false);
 
 // Fetches a blob, triggers a browser download for it, and cleans up the
 // object URL afterwards. Each call site gets its own instance so an
@@ -107,36 +107,23 @@ const applicationDownload = createBlobDownload();
 const coverLetterDownload = createBlobDownload();
 const cvDownload = createBlobDownload();
 
-// Tracks per-job DB creation state within this component instance so we don't
-// re-create a job that was already saved, even after switching jobs and back.
-const jobDbCreationState = new Map<string, 'saved' | 'failed'>();
-
-// Reactive flag for the current job's creation failure — drives the error label.
-const jobCreateFailed = ref(false);
-
-// Mirrors the current job object so the job-change flush can pass the OLD job to
-// createJobIfNeeded (props.job has already updated by the time the watch runs).
-const prevJob = ref<ScrapedJob>(props.job);
-
 watch(
     () => props.job.duplicateKey,
-    async (newKey, oldKey) => {
+    async (newKey) => {
         abortRevision();
-        const jobToFlush = prevJob.value;
-        if (oldKey && uploadTimer !== null) {
-            void uploadNow(oldKey, text.value, jobToFlush);
-        }
-        prevJob.value = props.job;
-        lastUploadedText.value = null;
-        saveStatus.value = 'idle';
-        jobCreateFailed.value =
-            jobDbCreationState.get(props.job.duplicateKey) === 'failed';
+        saveSession?.close();
         view.value = 'menu';
+        let draft = '';
         try {
-            text.value = window.localStorage.getItem(storageKey.value) ?? '';
+            draft = window.localStorage.getItem(storageKey.value) ?? '';
         } catch {
-            text.value = '';
+            // The coordinator retains an in-flight draft if storage is unavailable.
         }
+        saveSession = saves.connect(props.job, draft, (state) => {
+            saveStatus.value = state.status;
+            jobCreateFailed.value = state.jobCreateFailed;
+        });
+        text.value = saveSession.initialText;
         try {
             await getJson(`/cv/${newKey}/status`);
             if (newKey === props.job.duplicateKey) cvUploaded.value = true;
@@ -148,105 +135,15 @@ watch(
     { immediate: true },
 );
 
-function clearUploadTimer() {
-    if (uploadTimer !== null) {
-        clearTimeout(uploadTimer);
-        uploadTimer = null;
-    }
-}
-
-function scheduleUpload() {
-    clearUploadTimer();
-    if (text.value === lastUploadedText.value) {
-        saveStatus.value = 'saved';
-        return;
-    }
-    saveStatus.value = 'pending';
-    uploadTimer = setTimeout(() => void uploadNow(), UPLOAD_DEBOUNCE_MS);
-}
-
-function shouldSkipUpload(
-    snapshot: string,
-    isCurrentJob: () => boolean,
-): boolean {
-    if (!snapshot.trim()) {
-        if (isCurrentJob()) saveStatus.value = 'idle';
-        return true;
-    }
-    return snapshot === lastUploadedText.value || uploadInFlight;
-}
-
-function needsReschedule(newKey: string, snapshot: string): boolean {
-    return (
-        newKey === props.job.duplicateKey &&
-        text.value !== snapshot &&
-        text.value !== lastUploadedText.value
-    );
-}
-
-async function createJobIfNeeded(job: ScrapedJob): Promise<boolean> {
-    if (jobDbCreationState.get(job.duplicateKey) === 'saved') return true;
-    try {
-        await postJson('/jobs/create', { job, like: true });
-        jobDbCreationState.set(job.duplicateKey, 'saved');
-        if (job.duplicateKey === props.job.duplicateKey)
-            jobCreateFailed.value = false;
-        return true;
-    } catch (error) {
-        jobDbCreationState.set(job.duplicateKey, 'failed');
-        if (job.duplicateKey === props.job.duplicateKey) {
-            jobCreateFailed.value = true;
-            saveStatus.value = 'error';
-        }
-        console.error(
-            'Failed to create job in database:',
-            error instanceof Error ? error.message : String(error),
-        );
-        return false;
-    }
-}
-
-async function uploadNow(
-    newKey: string = props.job.duplicateKey,
-    snapshot: string = text.value,
-    jobForCreation: ScrapedJob = props.job,
-) {
-    clearUploadTimer();
-    const isCurrentJob = () => newKey === props.job.duplicateKey;
-    if (shouldSkipUpload(snapshot, isCurrentJob)) return;
-    uploadInFlight = true;
-    try {
-        const jobCreated = await createJobIfNeeded(jobForCreation);
-        if (!jobCreated) return;
-        if (isCurrentJob()) saveStatus.value = 'saving';
-        await postJson('/cover-letters/upload/text', {
-            coverLetterText: snapshot,
-            jobDuplicateKey: newKey,
-        });
-        if (isCurrentJob()) {
-            lastUploadedText.value = snapshot;
-            saveStatus.value = 'saved';
-        }
-    } catch (error) {
-        if (isCurrentJob()) saveStatus.value = 'error';
-        console.error(
-            'Failed to upload cover letter:',
-            error instanceof Error ? error.message : String(error),
-        );
-    } finally {
-        uploadInFlight = false;
-        if (needsReschedule(newKey, snapshot)) scheduleUpload();
-    }
-}
-
 function onChange(v: string) {
+    if (!saveSession) return;
     text.value = v;
     try {
         window.localStorage.setItem(storageKey.value, v);
     } catch {
         /* ignore */
     }
-    scheduleUpload();
+    saveSession.update(v);
 }
 
 function handleBack() {
@@ -254,15 +151,14 @@ function handleBack() {
         abortRevision();
         view.value = 'menu';
     } else {
-        void uploadNow();
+        void saveSession?.flush();
         emit('back');
     }
 }
 
 async function onCvFileSelected(file: File) {
     const keyAtStart = props.job.duplicateKey;
-    const jobAtStart = props.job;
-    const jobCreated = await createJobIfNeeded(jobAtStart);
+    const jobCreated = await saveSession?.ensureJob();
     if (!jobCreated || keyAtStart !== props.job.duplicateKey) return;
     const formData = new FormData();
     formData.append('file', file);
@@ -335,9 +231,8 @@ async function downloadApplication() {
 }
 
 onBeforeUnmount(() => {
-    if (uploadTimer !== null) {
-        void uploadNow();
-    }
+    saveSession?.close();
+    saveSession = null;
     applicationDownload.abort();
     coverLetterDownload.abort();
     cvDownload.abort();
@@ -427,7 +322,8 @@ async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
                 draftAtStart.slice(selection.end),
         );
     } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (error instanceof DOMException && error.name === 'AbortError')
+            return;
         revisionError.value = 'Could not revise this text. Please try again.';
         console.error(
             'Failed to revise cover letter selection:',
