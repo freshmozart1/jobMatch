@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { CoverLetterAction } from '@/components/coverLetter';
 import CvFileInput from '@/components/CvFileInput.vue';
+import CvUploadNotice from './CvUploadNotice.vue';
+import type { CvUploadNotice as CvUploadState } from '@/lib/cvUpload';
 
 withDefaults(
     defineProps<{
         letterDone: boolean;
         cvUploaded: boolean;
+        cvUploadNotice?: CvUploadState | null;
         documentDownloadBusy?: boolean;
     }>(),
     { documentDownloadBusy: false },
@@ -16,6 +19,7 @@ defineEmits<{
     download: [];
     downloadCoverLetter: [];
     downloadCv: [];
+    retryCvUpload: [];
 }>();
 </script>
 
@@ -37,6 +41,13 @@ defineEmits<{
             :uploaded="cvUploaded"
             @fileSelected="$emit('fileSelected', $event)"
             @download="$emit('downloadCv')"
+        />
+
+        <CvUploadNotice
+            v-if="cvUploadNotice"
+            :notice="cvUploadNotice"
+            :uploaded="cvUploaded"
+            @retry="$emit('retryCvUpload')"
         />
 
         <button

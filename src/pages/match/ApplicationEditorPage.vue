@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
+import { getBlob, postJson } from '@/lib/api';
+import { createCvUpload } from '@/lib/cvUpload';
 import {
     coverLetterSavesKey,
     createCoverLetterSaves,
+    type GeneratedCoverLetter,
 } from '@/lib/coverLetterSaves';
 import { CoverLetterEditor } from '@/components/coverLetter';
+import GenerationNotice from '@/components/application/GenerationNotice.vue';
 import type { CoverLetterRevisionSelection } from '@/components/coverLetter';
 import {
     APPLICATION_EDITOR_NAME,
@@ -41,7 +44,8 @@ function abortRevision() {
     resetRevision();
 }
 
-const cvUploaded = ref(false);
+const cvUpload = createCvUpload();
+const { uploaded: cvUploaded, notice: cvUploadNotice } = cvUpload;
 
 const letterDone = computed(() => text.value.trim().length > 0);
 
@@ -51,6 +55,10 @@ const saveStatus = ref<'idle' | 'pending' | 'saving' | 'saved' | 'error'>(
     'idle',
 );
 const jobCreateFailed = ref(false);
+const generating = ref(false);
+const generationDiscarded = ref(false);
+const restorationFailed = ref(false);
+let generationEpoch = 0;
 
 type DocumentKind = 'cover-letter' | 'application';
 type DocumentRequest = {
@@ -126,7 +134,8 @@ const cvDownload = createBlobDownload();
 
 watch(
     () => props.job.duplicateKey,
-    async (newKey) => {
+    (newKey) => {
+        generationEpoch++;
         cancelDocumentDownload();
         abortRevision();
         saveSession?.close();
@@ -140,15 +149,14 @@ watch(
         saveSession = saves.connect(props.job, draft, (state) => {
             saveStatus.value = state.status;
             jobCreateFailed.value = state.jobCreateFailed;
+            generating.value = state.generating;
+            generationDiscarded.value = state.generationDiscarded;
+            restorationFailed.value = state.restorationFailed;
         });
         text.value = saveSession.initialText;
-        try {
-            await getJson(`/cv/${newKey}/status`);
-            if (newKey === props.job.duplicateKey) cvUploaded.value = true;
-        } catch {
-            // 404 → no CV on server; also covers network errors
-            if (newKey === props.job.duplicateKey) cvUploaded.value = false;
-        }
+        if (props.active)
+            cvUpload.open(newKey, saveSession.ensureJob.bind(saveSession));
+        else cvUpload.close();
     },
     { immediate: true },
 );
@@ -156,18 +164,31 @@ watch(
 watch(
     () => props.active,
     (active) => {
-        if (!active) cancelDocumentDownload();
+        if (active && saveSession) {
+            cvUpload.open(
+                props.job.duplicateKey,
+                saveSession.ensureJob.bind(saveSession),
+            );
+        } else {
+            cvUpload.close();
+            generationEpoch++;
+            cancelDocumentDownload();
+        }
     },
 );
 
-function onChange(v: string) {
-    if (!saveSession) return;
+function storeDraftLocally(v: string) {
     text.value = v;
     try {
         window.localStorage.setItem(storageKey.value, v);
     } catch {
         /* ignore */
     }
+}
+
+function onChange(v: string) {
+    if (!saveSession) return;
+    storeDraftLocally(v);
     saveSession.update(v);
 }
 
@@ -176,27 +197,11 @@ function handleBack() {
         abortRevision();
         view.value = 'menu';
     } else {
+        cvUpload.close();
+        generationEpoch++;
         cancelDocumentDownload();
         void saveSession?.flush();
         emit('back');
-    }
-}
-
-async function onCvFileSelected(file: File) {
-    const keyAtStart = props.job.duplicateKey;
-    const jobCreated = await saveSession?.ensureJob();
-    if (!jobCreated || keyAtStart !== props.job.duplicateKey) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('jobDuplicateKey', keyAtStart);
-    try {
-        await postFormData('/cv/upload', formData);
-        if (keyAtStart === props.job.duplicateKey) cvUploaded.value = true;
-    } catch (error) {
-        console.error(
-            'Failed to upload CV:',
-            error instanceof Error ? error.message : error,
-        );
     }
 }
 
@@ -231,7 +236,18 @@ function fetchDocument(request: DocumentRequest) {
     );
 }
 
+async function prepareDocumentJob(request: DocumentRequest): Promise<boolean> {
+    const created = await request.session.ensureJob();
+    if (!isCurrentDocumentRequest(request)) return false;
+    if (!created) {
+        downloadError.value =
+            'Could not save the job needed for this PDF. Please try again.';
+    }
+    return created;
+}
+
 async function saveAndDownloadDocument(request: DocumentRequest) {
+    if (!(await prepareDocumentJob(request))) return;
     while (isCurrentDocumentRequest(request)) {
         const requestedText = text.value;
         if (!requestedText.trim()) {
@@ -321,6 +337,7 @@ async function downloadApplication() {
 }
 
 onBeforeUnmount(() => {
+    cvUpload.close();
     cancelDocumentDownload();
     saveSession?.close();
     saveSession = null;
@@ -328,31 +345,40 @@ onBeforeUnmount(() => {
     abortRevision();
 });
 
-const generating = ref(false);
-
 async function generateCoverLetter() {
-    if (generating.value || revising.value) return;
+    if (generating.value || revising.value || !saveSession || !props.active)
+        return;
     resetRevision();
-    generating.value = true;
+    const session = saveSession;
+    const epoch = generationEpoch;
     const keyAtStart = props.job.duplicateKey;
     // The endpoint never used the embedding — strip it from the request body.
     const { embedding, ...jobData } = props.job;
     void embedding;
     try {
-        const { coverLetter } = await postJson<{ coverLetter: string }>(
-            '/cover-letters/create/text',
-            jobData,
+        await session.generate(
+            () =>
+                postJson<GeneratedCoverLetter>(
+                    '/cover-letters/create/text',
+                    jobData,
+                ),
+            storeDraftLocally,
+            () =>
+                props.active &&
+                epoch === generationEpoch &&
+                session === saveSession &&
+                keyAtStart === props.job.duplicateKey,
         );
-        if (keyAtStart !== props.job.duplicateKey) return;
-        onChange(coverLetter);
     } catch (error) {
         console.error(
             'Failed to generate cover letter:',
             error instanceof Error ? error.message : String(error),
         );
-    } finally {
-        generating.value = false;
     }
+}
+
+function retryDraftSave() {
+    void saveSession?.flush();
 }
 
 async function reviseCoverLetter(selection: CoverLetterRevisionSelection) {
@@ -475,14 +501,23 @@ const statusLabel = computed(() => {
             </button>
         </div>
 
+        <GenerationNotice
+            :discarded="generationDiscarded"
+            :restoration-failed="restorationFailed"
+            :has-text="letterDone"
+            @retry="retryDraftSave"
+        />
+
         <!-- Application Editor menu -->
         <ApplicationEditorMenu
             v-if="view === 'menu'"
             :letter-done="letterDone"
             :cv-uploaded="cvUploaded"
+            :cv-upload-notice="cvUploadNotice"
             :document-download-busy="documentDownloadBusy"
             @open-letter="view = 'letter'"
-            @file-selected="onCvFileSelected"
+            @file-selected="cvUpload.select"
+            @retry-cv-upload="cvUpload.retry"
             @download="downloadApplication"
             @download-cover-letter="downloadCoverLetter"
             @download-cv="downloadCv"

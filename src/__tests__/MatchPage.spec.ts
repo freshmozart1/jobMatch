@@ -1117,7 +1117,7 @@ describe('MatchPage', () => {
         await expectSearchStopped(wrapper);
     });
 
-    it('keeps the already-streamed jobs when the scrape is cancelled', async () => {
+    it('keeps consumed partial results dismissed after cancellation and filter changes', async () => {
         const { wrapper, stream } = await mountWithFirstJobStreamed();
 
         stream.push(jobFrame(testJobs[1]!));
@@ -1135,12 +1135,12 @@ describe('MatchPage', () => {
         await wrapper.find('.scrape-cancel').trigger('click');
         await expectSearchStopped(wrapper);
 
-        // Toggling the match filter re-keys the stack, remounting it at index
-        // 0. The 90% job can only reappear if the partial deck survived.
+        // Remounting for a filter change must not reset the page's swipe history.
         await wrapper.find('.match-filter__switch').trigger('click');
         await wrapper.vm.$nextTick();
 
-        expectTopCardStillFirst(wrapper);
+        expect(wrapper.find('.job-card-stack__current').exists()).toBe(false);
+        expect(wrapper.find('.job-card-stack__empty').exists()).toBe(true);
     });
 
     it('surfaces a genuine scrape failure as an error message', async () => {

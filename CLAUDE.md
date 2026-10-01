@@ -66,3 +66,76 @@ snapshot and an active-request guard across awaits; `active` becomes false as
 soon as the editor closes, before its exit transition unmounts it. Failed saves
 must show a retry action and must not request a stale PDF. Deferred download
 regressions live in `src/__tests__/CoverLetterDownloadPersistence.spec.ts`.
+
+Generation is a per-job coordinator transaction too. It captures the draft
+revision before waiting for previous uploads and retains the entry while its
+provider response or restoration is pending. The endpoint persists before it
+responds: discard stale UI output AND invalidate savedText/restore the latest
+manual draft, including same-text edits. Detached sessions cannot apply results;
+reopened sessions inherit pending generation state. A failed restoration retains
+its entry for retry. Empty drafts cannot be uploaded by the current server API;
+report unsaved state instead of acknowledging them. Use the persisted-state
+fixtures in `CoverLetterGenerationPersistence.spec.ts` for these races. This is
+page-local ordering, not cross-tab or backend revision control.
+
+After the exact revision/session/lifecycle guards accept generation, only
+`response.saved === true` acknowledges its draft without a text upload. The
+coordinator owns that atomic draft/baseline update; the component callback only
+updates textarea/localStorage. Manual edits and missing/false/nonboolean saved
+values still use autosave. Idle editor entries cache only their acknowledged
+text and job-persistence flag for this page's lifetime; reopening must not
+re-segment unchanged generated text. PDF preparation separately ensures the job
+exists and re-checks request identity before continuing. Regression fixtures in
+`GeneratedCoverLetterAcknowledgement.spec.ts` distinguish original generated
+segments from re-segmented text and reject PDF requests lacking a job record.
+
+## Swipe history and filtered decks
+
+`MatchPage.vue` owns consumed `duplicateKey`s for one search and excludes them
+before applying the match filter. Record a committed swipe synchronously in
+`rateJob`; persistence is a separate operation. Filter changes and cancellation
+must not clear consumed keys. `fetchJobs` starts a fresh search and resets them
+alongside the streamed jobs, retaining outstanding rating keys; stream deduplication still uses duplicateKey.
+`JobCardStack.vue` is a controlled view of jobs[0]/jobs[1]: it emits ratings and
+never increments a second cursor when the parent removes a consumed job.
+Filter re-keying only resets transient gestures. Mounted stream regression
+coverage lives in `MatchConsumedJobs.spec.ts`, including hidden unseen jobs,
+new arrivals, cancellation and fresh-search reset.
+
+## Failed rating recovery
+
+`createRatingSaves()` in `src/lib/ratingSaves.ts` belongs to one MatchPage.
+Capture a deep independent job payload and boolean choice at enqueue, retain
+one pending/failed entry per duplicateKey, and set pending synchronously before
+sending. Retry only a failed entry; remove only that exact entry after a
+successful response. Filters and new searches must not clear the queue or
+replace its original payload. New-search consumed keys include outstanding
+ratings so streamed duplicates cannot overwrite a pending choice.
+`RatingSaveStatus.vue` presents failures and retry progress outside search/deck
+conditionals; its bounded height is reserved in the card layout. Fixtures in
+`RatingRecovery.spec.ts` use deferred HTTP/network failures, independent keys,
+mutable job data, new searches and ambiguous responses. Backend upsert makes
+identical retries converge by key; do not claim exactly-once HTTP after a lost
+response. The queue is page-local and does not survive reload.
+
+## CV upload recovery
+
+`createCvUpload()` in `src/lib/cvUpload.ts` owns the selected File, notice and
+attachment availability for one editor. `ApplicationEditorPage.vue` opens a
+fresh CV session after connecting its cover-letter save session; capture that
+session's `ensureJob` and duplicateKey before awaiting. Job/active/back/unmount
+changes invalidate old completions, including A/B/A identity reuse. Serialize
+writes by duplicateKey within the helper, not across independent jobs. A newer
+selection replaces retry intent and skips an obsolete queued file; duplicate
+retries cannot overlap. An acknowledged older selection can establish attachment
+availability in its current session, but cannot mark a newer file successful.
+Late status responses must not downgrade an acknowledged upload.
+
+`CvUploadNotice.vue` shows pending/success/error and explicit retry next to the
+CV input. Keep downloads of an existing attachment available when replacement
+fails. Do not claim rollback after HTTP/network uncertainty: the server persists
+before its response and exposes no file version. Retry retains the exact File;
+reset the native input after selection to permit choosing the same file again.
+`CvUploadRecovery.spec.ts` covers deferred upload/status/preparation and lifecycle
+races. State is editor-local; no cross-instance/tab/backend revision ordering is
+claimed, and status-fetch error UX remains a separate issue.
