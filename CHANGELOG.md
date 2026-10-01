@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.8
+
+### Fixed
+
+- CV uploads now show the selected file, pending/success feedback and actionable
+  errors with a retry of the intended file. Failed replacements retain existing
+  attachment downloads without claiming that an uncertain response rolled back
+  the server write. New selections, late status responses and editor/job changes
+  cannot acknowledge the wrong file; uploads are ordered per job (#103).
+
 ## v0.5.7
 
 ### Fixed

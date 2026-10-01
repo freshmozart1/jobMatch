@@ -11,7 +11,9 @@ function openFilePicker() {
 }
 
 function onChange(event: Event) {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // Allow selecting the same file after a failed upload.
     if (!file) return;
     emit('fileSelected', file);
 }

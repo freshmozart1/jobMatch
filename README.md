@@ -36,6 +36,13 @@ to be running for jobMatch to do anything. See
   A lost response can follow a successful write; retry sends the identical
   job/rating to the backend's `duplicateKey` upsert instead of claiming that
   only one HTTP request ever reached the server.
+- **CV uploads** — the Application Editor shows the selected filename while
+  uploading and confirms success beside the CV control. If an upload cannot be
+  confirmed, retry the intended file or choose another PDF. Existing attachment
+  downloads remain available after a failed replacement; an uncertain network
+  response does not prove which file the server retained. Uploads for the same
+  job are ordered within one editor, while different jobs proceed independently.
+  The selected file and retry state last until that editor session closes.
 - **Search** — up to five keywords plus a city, a search radius in kilometres
   and a "date posted" window (past 24 hours / week / month)
   (`src/pages/match/SearchPage.vue`). Everything is persisted in `localStorage`,
