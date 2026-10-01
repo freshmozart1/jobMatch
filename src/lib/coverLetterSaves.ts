@@ -10,6 +10,8 @@ type SaveState = {
     restorationFailed: boolean;
 };
 
+export type GeneratedCoverLetter = { coverLetter: string; saved?: unknown };
+
 type Draft = { text: string; revision: number };
 type Listener = (state: SaveState) => void;
 type Entry = {
@@ -38,6 +40,12 @@ export const coverLetterSavesKey: InjectionKey<
 /** One page owns the queue; editor instances only hold disposable sessions. */
 export function createCoverLetterSaves() {
     const entries = new Map<string, Entry>();
+    // Keep only persistence metadata after an editor's working entry is released.
+    // This cache belongs to the page, never localStorage or another browser tab.
+    const acknowledgedDrafts = new Map<
+        string,
+        { text: string; jobSaved: boolean }
+    >();
 
     function notify(
         entry: Entry,
@@ -62,12 +70,20 @@ export function createCoverLetterSaves() {
 
     function releaseIfIdle(entry: Entry) {
         if (
+            entries.get(entry.job.duplicateKey) === entry &&
             entry.listeners.size === 0 &&
+            !entry.creatingJob &&
             !entry.running &&
             !entry.generation &&
             !entry.restoreRequired &&
             entry.timer === null
         ) {
+            if (entry.savedText !== null) {
+                acknowledgedDrafts.set(entry.job.duplicateKey, {
+                    text: entry.savedText,
+                    jobSaved: entry.jobSaved,
+                });
+            }
             entries.delete(entry.job.duplicateKey);
         }
     }
@@ -92,6 +108,7 @@ export function createCoverLetterSaves() {
             })
             .finally(() => {
                 entry.creatingJob = null;
+                releaseIfIdle(entry);
             });
         return entry.creatingJob;
     }
@@ -202,11 +219,11 @@ export function createCoverLetterSaves() {
     async function receiveGeneration(
         entry: Entry,
         revision: number,
-        request: () => Promise<{ coverLetter: string }>,
+        request: () => Promise<GeneratedCoverLetter>,
         apply: (text: string) => void,
         isCurrent: () => boolean,
     ) {
-        let result: { coverLetter: string };
+        let result: GeneratedCoverLetter;
         try {
             result = await request();
             if (
@@ -222,6 +239,7 @@ export function createCoverLetterSaves() {
         }
         entry.savedText = null; // Generation itself persisted a different document.
         if (revision === entry.draft.revision && isCurrent()) {
+            updateDraft(entry, result.coverLetter, result.saved === true);
             apply(result.coverLetter);
             return;
         }
@@ -231,7 +249,7 @@ export function createCoverLetterSaves() {
 
     function generate(
         entry: Entry,
-        request: () => Promise<{ coverLetter: string }>,
+        request: () => Promise<GeneratedCoverLetter>,
         apply: (text: string) => void,
         isCurrent: () => boolean,
     ): Promise<void> {
@@ -260,16 +278,37 @@ export function createCoverLetterSaves() {
         return entry.generation;
     }
 
+    function updateDraft(entry: Entry, text: string, acknowledged = false) {
+        clearTimer(entry);
+        entry.draft = { text, revision: entry.draft.revision + 1 };
+        if (acknowledged) {
+            entry.savedText = text;
+            entry.restoreRequired = false;
+        }
+        if (
+            acknowledged ||
+            (!entry.running && !entry.generation && text === entry.savedText)
+        ) {
+            notify(entry, 'saved');
+            return;
+        }
+        notify(entry, 'pending');
+        entry.timer = setTimeout(() => void flush(entry), UPLOAD_DEBOUNCE_MS);
+    }
+
     function connect(job: ScrapedJob, initialText: string, listener: Listener) {
         let entry = entries.get(job.duplicateKey);
         if (!entry) {
+            const acknowledged = acknowledgedDrafts.get(job.duplicateKey);
+            acknowledgedDrafts.delete(job.duplicateKey);
             entry = {
                 job,
                 draft: { text: initialText, revision: 0 },
-                savedText: null,
+                savedText: acknowledged?.text ?? null,
                 readyRevision: -1,
                 state: {
-                    status: 'idle',
+                    status:
+                        acknowledged?.text === initialText ? 'saved' : 'idle',
                     jobCreateFailed: false,
                     generating: false,
                     generationDiscarded: false,
@@ -278,7 +317,7 @@ export function createCoverLetterSaves() {
                 listeners: new Set(),
                 timer: null,
                 running: null,
-                jobSaved: false,
+                jobSaved: acknowledged?.jobSaved ?? false,
                 creatingJob: null,
                 generation: null,
                 generationDiscarded: false,
@@ -296,25 +335,11 @@ export function createCoverLetterSaves() {
             initialText: current.draft.text,
             update(text: string) {
                 if (!connected) return;
-                clearTimer(current);
-                current.draft = { text, revision: current.draft.revision + 1 };
-                if (
-                    !current.running &&
-                    !current.generation &&
-                    text === current.savedText
-                ) {
-                    notify(current, 'saved');
-                    return;
-                }
-                notify(current, 'pending');
-                current.timer = setTimeout(
-                    () => void flush(current),
-                    UPLOAD_DEBOUNCE_MS,
-                );
+                updateDraft(current, text);
             },
             flush: () => (connected ? flush(current) : Promise.resolve(false)),
             generate(
-                request: () => Promise<{ coverLetter: string }>,
+                request: () => Promise<GeneratedCoverLetter>,
                 apply: (text: string) => void,
                 isCurrent: () => boolean,
             ) {

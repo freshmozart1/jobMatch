@@ -380,9 +380,12 @@ describe('generation and manual draft persistence', () => {
         expect(click).toHaveBeenCalledOnce();
     });
 
-    it('applies an unchanged generation normally and keeps the existing debounced upload', async () => {
+    it('applies a legacy unacknowledged generation and keeps its debounced upload', async () => {
         await generate();
-        await generated();
+        generations[0]!.response.resolve(
+            json({ coverLetter: 'Generated result' }),
+        );
+        await flushPromises();
         expectDraft('Generated result');
         expect(uploads).toHaveLength(0);
         await debounce();

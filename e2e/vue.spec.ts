@@ -502,6 +502,76 @@ test('keeps manual edits when generation finishes and restores the server draft'
     ).toBe(manualDraft);
 });
 
+test('downloads acknowledged generation after reopening without re-segmenting it', async ({
+    page,
+}) => {
+    await page.clock.install();
+    const originalSegments = [
+        { kind: 'opening', text: 'Generated introduction.' },
+        { kind: 'closing', text: 'Generated conclusion.' },
+    ];
+    let storedSegments = originalSegments;
+    let plainTextUploads = 0;
+    let jobStored = false;
+    await page.route('**/cover-letters/create/text', async (route) => {
+        await route.fulfill({
+            status: 201,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                coverLetter: 'Generated introduction. Generated conclusion.',
+                saved: true,
+            }),
+        });
+    });
+    await page.route('**/cover-letters/upload/text', async (route) => {
+        plainTextUploads++;
+        storedSegments = [
+            {
+                kind: 'resegmented',
+                text: route.request().postDataJSON().coverLetterText,
+            },
+        ];
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/jobs/create', async (route) => {
+        jobStored = true;
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route(
+        `**/cover-letters/${mockJob.duplicateKey}`,
+        async (route) => {
+            await route.fulfill({
+                status: jobStored ? 200 : 404,
+                contentType: 'application/pdf',
+                body: '%PDF-synthetic',
+            });
+        },
+    );
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    const launcher = page.getByRole('button', {
+        name: `Open ${APPLICATION_EDITOR_NAME}`,
+    });
+    await launcher.click();
+    await page.locator('.cl-action__row').first().click();
+    await page.locator('.cl-generate').click();
+    await expect(page.locator('.editor .cl-meta')).toContainText(
+        'Saved to server',
+    );
+    await page.clock.fastForward(3100);
+    await page.locator('.editor').getByRole('button', { name: 'Back' }).click();
+    await page.locator('.editor').getByRole('button', { name: 'Back' }).click();
+    await expect(page.locator('.editor')).toHaveCount(0);
+    await launcher.click();
+    const file = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download cover letter' }).click();
+    expect((await file).suggestedFilename()).toBe(
+        'cover-letter-example-mobile-layout-test.pdf',
+    );
+    expect(jobStored).toBe(true);
+    expect(plainTextUploads).toBe(0);
+    expect(storedSegments).toBe(originalSegments);
+});
+
 test('revises the exact selected cover-letter range through the released server contract', async ({
     page,
 }) => {

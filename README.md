@@ -89,7 +89,12 @@ to be running for jobMatch to do anything. See
   holds newer uploads until the response arrives. You can keep typing while AI
   works. If you edit, close the editor, or switch jobs, the generated response
   is discarded and the current draft is restored on the server, because the
-  generation endpoint saves its result before replying. A failed restoration
+  generation endpoint saves its result before replying. An accepted response
+  with `saved: true` becomes the saved baseline without another plain-text
+  upload, preserving the generator's segments and embeddings. Only the literal
+  boolean `true` acknowledges persistence; older responses without it keep the
+  debounced upload. The page remembers this baseline across editor close/reopen.
+  PDF downloads create the job record separately when needed. A failed restoration
   shows a save retry action, including after reopening the editor. Empty letters
   cannot be stored by the current server API: cleared text stays local and the
   editor asks you to add text before retrying. This ordering covers one page's

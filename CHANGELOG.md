@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.5
+
+### Fixed
+
+- Generated letters acknowledged with `saved: true` now keep their original
+  server-saved segments and embeddings instead of uploading the unchanged text
+  again. The saved baseline survives closing/reopening the editor; PDF downloads
+  create a missing job record separately. Manual edits and legacy generation
+  responses still autosave, and stale generated results still restore the
+  current manual draft (#105).
+
 ## v0.5.4
 
 ### Fixed

@@ -76,5 +76,15 @@ reopened sessions inherit pending generation state. A failed restoration retains
 its entry for retry. Empty drafts cannot be uploaded by the current server API;
 report unsaved state instead of acknowledging them. Use the persisted-state
 fixtures in `CoverLetterGenerationPersistence.spec.ts` for these races. This is
-page-local ordering, not cross-tab or backend revision control. Normal accepted
-generation still follows the existing debounced upload (#105 is separate).
+page-local ordering, not cross-tab or backend revision control.
+
+After the exact revision/session/lifecycle guards accept generation, only
+`response.saved === true` acknowledges its draft without a text upload. The
+coordinator owns that atomic draft/baseline update; the component callback only
+updates textarea/localStorage. Manual edits and missing/false/nonboolean saved
+values still use autosave. Idle editor entries cache only their acknowledged
+text and job-persistence flag for this page's lifetime; reopening must not
+re-segment unchanged generated text. PDF preparation separately ensures the job
+exists and re-checks request identity before continuing. Regression fixtures in
+`GeneratedCoverLetterAcknowledgement.spec.ts` distinguish original generated
+segments from re-segmented text and reject PDF requests lacking a job record.
