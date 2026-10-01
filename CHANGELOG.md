@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.6
+
+### Fixed
+
+- Swiped jobs no longer reappear when the match filter or threshold changes.
+  The page tracks consumed job keys for the current search and the stack shows
+  the remaining jobs without advancing a second cursor. Hidden unseen jobs and
+  newly streamed jobs remain reachable, cancellation keeps swipe history, and
+  starting a fresh search resets it (#101).
+
 ## v0.5.5
 
 ### Fixed

@@ -28,11 +28,12 @@ const emit = defineEmits<{
     (e: 'cancel'): void;
 }>();
 
-const currentIndex = ref(0);
 const dragProgress = ref(0);
 
-const currentJob = computed(() => props.jobs[currentIndex.value]);
-const nextJob = computed(() => props.jobs[currentIndex.value + 1]);
+// The parent owns which jobs remain; advancing another index here would skip
+// a card when the parent removes the one just consumed.
+const currentJob = computed(() => props.jobs[0]);
+const nextJob = computed(() => props.jobs[1]);
 
 const nextScale = computed(() => 0.92 + dragProgress.value * 0.08);
 const nextOpacity = computed(() => 0.5 + dragProgress.value * 0.5);
@@ -46,7 +47,6 @@ function onDrag(payload: {
 
 function onSwipe(direction: 'left' | 'right') {
     if (currentJob.value) emit('like', currentJob.value, direction === 'right');
-    currentIndex.value += 1;
     dragProgress.value = 0;
 }
 </script>

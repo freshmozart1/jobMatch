@@ -35,6 +35,7 @@ import type { ScrapeProgressFrame, ScrapeStreamFrame } from './scrapeStream';
 provide(coverLetterSavesKey, createCoverLetterSaves());
 
 const jobs = ref<ScrapedJob[]>([]);
+const consumedJobKeys = ref(new Set<string>());
 const isLoading = ref(false);
 const errorMessage = ref<string | null>(null);
 const scrapeCancelled = ref(false);
@@ -60,12 +61,12 @@ const dialogActive = computed(
     () => activeJob.value !== null || searchDialogActive.value,
 );
 const visibleJobs = computed(() =>
-    matchFilterOn.value
-        ? jobs.value.filter(
-              (job) =>
-                  Math.round((job.match ?? 0) * 100) >= matchThreshold.value,
-          )
-        : jobs.value,
+    jobs.value.filter(
+        (job) =>
+            !consumedJobKeys.value.has(job.duplicateKey) &&
+            (!matchFilterOn.value ||
+                Math.round((job.match ?? 0) * 100) >= matchThreshold.value),
+    ),
 );
 const progressLabel = computed(() => {
     const progress = latestProgress.value;
@@ -350,6 +351,12 @@ function handleDialogKeydown(event: KeyboardEvent): void {
     }
 }
 
+function rateJob(job: ScrapedJob, like: boolean): void {
+    if (consumedJobKeys.value.has(job.duplicateKey)) return;
+    consumedJobKeys.value.add(job.duplicateKey);
+    void createJob(job, like);
+}
+
 async function createJob(job: ScrapedJob, like: boolean): Promise<void> {
     try {
         await postJson('/jobs/create', { job, like });
@@ -453,6 +460,7 @@ async function fetchJobs(): Promise<void> {
     const signal = scrapeAbortController.signal;
     isLoading.value = true;
     jobs.value = [];
+    consumedJobKeys.value.clear();
     errorMessage.value = null;
     saveScrapeError(null);
     scrapeCancelled.value = false;
@@ -615,7 +623,7 @@ watch(searchOpen, (open) => {
                     :is-loading="isLoading"
                     loading-label="Waiting for more jobs…"
                     :application-editor-open="applicationEditorOpen"
-                    @like="createJob"
+                    @like="rateJob"
                     @edit="openApplicationEditor"
                     @cancel="cancelScrape"
                 />

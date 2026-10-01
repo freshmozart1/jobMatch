@@ -279,6 +279,9 @@ test('keeps live progress and populated controls inside a mobile viewport', asyn
 test('keeps sticky like controls visible while swiping on compact portrait', async ({
     page,
 }) => {
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
     await loadPopulatedMatchPage(page, { width: 360, height: 640 });
 
     const card = page.locator('.job-card-stack__current .job-card');
@@ -329,6 +332,40 @@ for (const { control, expectedLike } of [
         });
     });
 }
+
+test('keeps rated jobs dismissed across match filters without skipping unseen cards', async ({
+    page,
+}) => {
+    const ratedKeys: string[] = [];
+    await page.route('**/jobs/create', async (route) => {
+        ratedKeys.push(route.request().postDataJSON().job.duplicateKey);
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+    const current = page.locator('.job-card-stack__current h2');
+    await expect(current).toHaveText(mockJobs[0].title);
+    await page.getByRole('button', { name: 'Like', exact: true }).click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    const filter = page.getByRole('switch', {
+        name: 'Only show jobs at or above the minimum match',
+    });
+    await filter.click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    const threshold = page.getByRole('spinbutton', {
+        name: 'Minimum match percentage',
+    });
+    await threshold.fill('85');
+    await expect(current).toHaveCount(0);
+    await threshold.fill('80');
+    await expect(current).toHaveText(mockJobs[1].title);
+    await filter.click();
+    await expect(current).toHaveText(mockJobs[1].title);
+    await page.getByRole('button', { name: 'Dislike', exact: true }).click();
+    await expect(current).toHaveCount(0);
+    await filter.click();
+    await expect(current).toHaveCount(0);
+    expect(ratedKeys).toEqual(mockJobs.map((job) => job.duplicateKey));
+});
 
 test('keeps Application Editor focus modal, restores its launcher, and reopens cleanly', async ({
     page,
