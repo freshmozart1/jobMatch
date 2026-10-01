@@ -24,6 +24,18 @@ to be running for jobMatch to do anything. See
   left to dislike, with the next card previewed underneath
   (`src/components/jobCard/JobCardStack.vue`). Each card shows the title,
   company (linking back to the original ad), tags and the full description.
+  Swiped job keys stay dismissed for the current search even when the match
+  filter or threshold changes. Lowering the threshold can reveal unseen jobs,
+  and new streamed jobs remain available. Starting a fresh search resets this
+  history; changing only the match filter does not. If a rating cannot be
+  confirmed, a notice keeps the original job and Like/Dislike choice with a
+  retry button. Retries do not rescrape or repeat a request already in flight.
+  Pending and failed choices survive filter changes and new searches within
+  the open page, and their jobs stay dismissed until recovery. The recovery
+  queue is held in memory and ends when the page is closed or reloaded.
+  A lost response can follow a successful write; retry sends the identical
+  job/rating to the backend's `duplicateKey` upsert instead of claiming that
+  only one HTTP request ever reached the server.
 - **Search** — up to five keywords plus a city, a search radius in kilometres
   and a "date posted" window (past 24 hours / week / month)
   (`src/pages/match/SearchPage.vue`). Everything is persisted in `localStorage`,
@@ -38,8 +50,8 @@ to be running for jobMatch to do anything. See
   full-area progress state on the match page, and the "Waiting for more jobs…"
   state of the deck itself, which you reach by swiping through the
   jobs that already arrived while the scrape is still running. Cancelling
-  aborts the in-flight `POST /scrape/linkedin` request, keeps every job
-  streamed in so far on screen and swipeable, and settles into "Search
+  aborts the in-flight `POST /scrape/linkedin` request, keeps the unswiped jobs
+  streamed in so far available, and settles into "Search
   stopped" rather than an error — stopping a scrape on purpose is not a
   failure. The stopped search stays re-runnable as it is: opening the search
   sheet and closing it again starts the same search over, without having to
@@ -89,7 +101,12 @@ to be running for jobMatch to do anything. See
   holds newer uploads until the response arrives. You can keep typing while AI
   works. If you edit, close the editor, or switch jobs, the generated response
   is discarded and the current draft is restored on the server, because the
-  generation endpoint saves its result before replying. A failed restoration
+  generation endpoint saves its result before replying. An accepted response
+  with `saved: true` becomes the saved baseline without another plain-text
+  upload, preserving the generator's segments and embeddings. Only the literal
+  boolean `true` acknowledges persistence; older responses without it keep the
+  debounced upload. The page remembers this baseline across editor close/reopen.
+  PDF downloads create the job record separately when needed. A failed restoration
   shows a save retry action, including after reopening the editor. Empty letters
   cannot be stored by the current server API: cleared text stays local and the
   editor asks you to add text before retrying. This ordering covers one page's

@@ -5,6 +5,7 @@ import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
 import {
     coverLetterSavesKey,
     createCoverLetterSaves,
+    type GeneratedCoverLetter,
 } from '@/lib/coverLetterSaves';
 import { CoverLetterEditor } from '@/components/coverLetter';
 import GenerationNotice from '@/components/application/GenerationNotice.vue';
@@ -172,14 +173,18 @@ watch(
     },
 );
 
-function onChange(v: string) {
-    if (!saveSession) return;
+function storeDraftLocally(v: string) {
     text.value = v;
     try {
         window.localStorage.setItem(storageKey.value, v);
     } catch {
         /* ignore */
     }
+}
+
+function onChange(v: string) {
+    if (!saveSession) return;
+    storeDraftLocally(v);
     saveSession.update(v);
 }
 
@@ -244,7 +249,18 @@ function fetchDocument(request: DocumentRequest) {
     );
 }
 
+async function prepareDocumentJob(request: DocumentRequest): Promise<boolean> {
+    const created = await request.session.ensureJob();
+    if (!isCurrentDocumentRequest(request)) return false;
+    if (!created) {
+        downloadError.value =
+            'Could not save the job needed for this PDF. Please try again.';
+    }
+    return created;
+}
+
 async function saveAndDownloadDocument(request: DocumentRequest) {
+    if (!(await prepareDocumentJob(request))) return;
     while (isCurrentDocumentRequest(request)) {
         const requestedText = text.value;
         if (!requestedText.trim()) {
@@ -354,11 +370,11 @@ async function generateCoverLetter() {
     try {
         await session.generate(
             () =>
-                postJson<{ coverLetter: string }>(
+                postJson<GeneratedCoverLetter>(
                     '/cover-letters/create/text',
                     jobData,
                 ),
-            onChange,
+            storeDraftLocally,
             () =>
                 props.active &&
                 epoch === generationEpoch &&
