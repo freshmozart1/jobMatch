@@ -36,6 +36,10 @@ to be running for jobMatch to do anything. See
   A lost response can follow a successful write; retry sends the identical
   job/rating to the backend's `duplicateKey` upsert instead of claiming that
   only one HTTP request ever reached the server.
+- **Revision keyboard controls** — Escape dismisses the selected-text revision
+  form and returns focus to the cover letter. Press Escape again to close the
+  Application Editor and return to its launcher. Pending revisions can be
+  cancelled with Escape or Cancel; late responses cannot change the draft.
 - **CV uploads** — the Application Editor shows the selected filename while
   uploading and confirms success beside the CV control. If an upload cannot be
   confirmed, retry the intended file or choose another PDF. Existing attachment

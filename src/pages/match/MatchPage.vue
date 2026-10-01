@@ -323,39 +323,52 @@ function handleDialogFocusin(event: FocusEvent): void {
     focusDialogHeading(dialog);
 }
 
+// Nested controls get first refusal; Tab/focus containment stays in capture.
+function handleDialogEscape(event: KeyboardEvent): void {
+    if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        !getActiveDialog()?.isConnected
+    )
+        return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (applicationEditorOpen.value) closeApplicationEditor();
+    else if (searchOpen.value) closeSearch();
+}
+
+function getTabBoundaryTarget(
+    elements: HTMLElement[],
+    activeElement: HTMLElement | null,
+    backwards: boolean,
+): HTMLElement | undefined {
+    const first = elements[0];
+    const last = elements[elements.length - 1];
+    if (!activeElement || !elements.includes(activeElement)) {
+        return backwards ? last : first;
+    }
+    if (backwards && activeElement === first) return last;
+    if (!backwards && activeElement === last) return first;
+    return undefined;
+}
+
 function handleDialogKeydown(event: KeyboardEvent): void {
     const dialog = getActiveDialog();
-    if (!dialog?.isConnected) return;
-
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        if (applicationEditorOpen.value) closeApplicationEditor();
-        else if (searchOpen.value) closeSearch();
-        return;
-    }
-    if (event.key !== 'Tab') return;
-
+    if (!dialog?.isConnected || event.key !== 'Tab') return;
     const tabbableElements = getTabbableElements(dialog);
-    const activeElement = document.activeElement as HTMLElement | null;
-    const first = tabbableElements[0];
-    const last = tabbableElements[tabbableElements.length - 1];
-
-    if (!first || !last) {
+    if (tabbableElements.length === 0) {
         event.preventDefault();
         focusDialogHeading(dialog);
         return;
     }
-
-    if (!activeElement || !tabbableElements.includes(activeElement)) {
+    const target = getTabBoundaryTarget(
+        tabbableElements,
+        document.activeElement as HTMLElement | null,
+        event.shiftKey,
+    );
+    if (target) {
         event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-    } else if (event.shiftKey && activeElement === first) {
-        event.preventDefault();
-        last.focus();
-    } else if (!event.shiftKey && activeElement === last) {
-        event.preventDefault();
-        first.focus();
+        target.focus();
     }
 }
 
@@ -523,11 +536,13 @@ onUnmounted(() => {
     stopElapsedTimer();
     document.removeEventListener('focusin', handleDialogFocusin, true);
     document.removeEventListener('keydown', handleDialogKeydown, true);
+    document.removeEventListener('keydown', handleDialogEscape);
 });
 
 onMounted(() => {
     document.addEventListener('focusin', handleDialogFocusin, true);
     document.addEventListener('keydown', handleDialogKeydown, true);
+    document.addEventListener('keydown', handleDialogEscape);
     if (keywords.value.length === 0) return;
     const lastError = loadScrapeError();
     if (lastError !== null) {
