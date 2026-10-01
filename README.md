@@ -94,17 +94,17 @@ to be running for jobMatch to do anything. See
   the CV alone (`GET /cv/<duplicateKey>`), or both:
     - the CV download button is disabled until the CV is on the server
       (`:disabled="!uploaded"` in `CvFileInput.vue`);
-    - the cover letter download button is disabled until a draft exists **in
-      this browser** (`:disabled="!done"` in
-      `src/components/coverLetter/CoverLetterAction.vue`, fed by
-      `letterDone = text.trim().length > 0`) — that is the local draft, not the
-      uploaded document, so it enables before the debounced upload lands;
-    - "Download application" is disabled until at least one of the two exists
-      (`:disabled="!letterDone && !cvUploaded"`), on the same local-draft
-      reading of the cover letter;
-    - with **both** present it fetches the merged PDF
-      (`GET /application/<key>`); with only one, it downloads that single
-      document instead of a merged PDF.
+    - the cover letter download button is enabled when a non-empty local draft
+      exists. Clicking it first saves the latest draft, including any edits made
+      while an older upload is still running, and only then requests the PDF;
+    - "Download application" is enabled when either document exists. With both
+      present it saves the latest letter before fetching the merged PDF
+      (`GET /application/<key>`); with only one, it downloads that document;
+    - while saving or fetching a letter-containing PDF, both download actions
+      are disabled and the editor shows progress. A failed save prevents the
+      download and shows a retry button. Closing the editor or changing jobs
+      cancels the download request; the normal draft save can still finish;
+    - CV-only downloads do not wait for a cover-letter save.
 
 ## Requirements
 

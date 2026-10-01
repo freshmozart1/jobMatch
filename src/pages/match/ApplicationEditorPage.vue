@@ -15,7 +15,10 @@ import {
     COVER_LETTER_NAME,
 } from '@/components/application';
 
-const props = defineProps<{ job: ScrapedJob }>();
+const props = withDefaults(
+    defineProps<{ job: ScrapedJob; active?: boolean }>(),
+    { active: true },
+);
 const emit = defineEmits<{ back: [] }>();
 
 const storageKey = computed(
@@ -49,6 +52,18 @@ const saveStatus = ref<'idle' | 'pending' | 'saving' | 'saved' | 'error'>(
 );
 const jobCreateFailed = ref(false);
 
+type DocumentKind = 'cover-letter' | 'application';
+type DocumentRequest = {
+    kind: DocumentKind;
+    key: string;
+    session: ReturnType<typeof saves.connect>;
+};
+const downloadStatus = ref<string | null>(null);
+const downloadError = ref<string | null>(null);
+const documentDownloadBusy = computed(() => downloadStatus.value !== null);
+let documentRequest: DocumentRequest | null = null;
+let retryDocumentKind: DocumentKind | null = null;
+
 // Fetches a blob, triggers a browser download for it, and cleans up the
 // object URL afterwards. Each call site gets its own instance so an
 // in-flight CV download never blocks a cover-letter (or application)
@@ -65,9 +80,11 @@ function createBlobDownload() {
     ) {
         if (inFlight) return;
         inFlight = true;
-        abortController = new AbortController();
+        const controller = new AbortController();
+        abortController = controller;
         try {
-            const blob = await fetchBlob(abortController.signal);
+            const blob = await fetchBlob(controller.signal);
+            if (controller.signal.aborted) return;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -110,6 +127,7 @@ const cvDownload = createBlobDownload();
 watch(
     () => props.job.duplicateKey,
     async (newKey) => {
+        cancelDocumentDownload();
         abortRevision();
         saveSession?.close();
         view.value = 'menu';
@@ -135,6 +153,13 @@ watch(
     { immediate: true },
 );
 
+watch(
+    () => props.active,
+    (active) => {
+        if (!active) cancelDocumentDownload();
+    },
+);
+
 function onChange(v: string) {
     if (!saveSession) return;
     text.value = v;
@@ -151,6 +176,7 @@ function handleBack() {
         abortRevision();
         view.value = 'menu';
     } else {
+        cancelDocumentDownload();
         void saveSession?.flush();
         emit('back');
     }
@@ -174,21 +200,98 @@ async function onCvFileSelected(file: File) {
     }
 }
 
-async function downloadCoverLetter() {
+function cancelDocumentDownload() {
+    documentRequest = null;
+    downloadStatus.value = null;
+    downloadError.value = null;
+    retryDocumentKind = null;
+    applicationDownload.abort();
+    coverLetterDownload.abort();
+}
+
+function isCurrentDocumentRequest(request: DocumentRequest): boolean {
+    return (
+        documentRequest === request &&
+        props.active &&
+        saveSession === request.session &&
+        props.job.duplicateKey === request.key
+    );
+}
+
+function fetchDocument(request: DocumentRequest) {
+    const downloader =
+        request.kind === 'application'
+            ? applicationDownload
+            : coverLetterDownload;
+    const route =
+        request.kind === 'application' ? '/application/' : '/cover-letters/';
+    return downloader.run(
+        (signal) => getBlob(route + request.key, signal),
+        request.kind + '-' + request.key.replace(/:/g, '-') + '.pdf',
+    );
+}
+
+async function saveAndDownloadDocument(request: DocumentRequest) {
+    while (isCurrentDocumentRequest(request)) {
+        const requestedText = text.value;
+        if (!requestedText.trim()) {
+            downloadError.value = 'Write a cover letter before downloading it.';
+            return;
+        }
+        const saved = await request.session.flush();
+        if (!isCurrentDocumentRequest(request)) return;
+        if (saveStatus.value === 'error') {
+            downloadError.value =
+                'Could not save the latest cover letter. Please try again.';
+            return;
+        }
+        // A newer edit may still be debounced when the older write settles.
+        // Flush that revision too, and never use a false result as an acknowledgement.
+        if (
+            !saved ||
+            text.value !== requestedText ||
+            saveStatus.value !== 'saved'
+        )
+            continue;
+
+        downloadStatus.value = 'Downloading PDF…';
+        await fetchDocument(request);
+        return;
+    }
+}
+
+async function downloadDocument(kind: DocumentKind) {
+    if (documentRequest || !saveSession || !props.active) return;
+    const request = { kind, key: props.job.duplicateKey, session: saveSession };
+    documentRequest = request;
+    retryDocumentKind = kind;
+    downloadError.value = null;
+    downloadStatus.value = 'Saving latest cover letter…';
     try {
-        await coverLetterDownload.run(
-            (signal) =>
-                getBlob('/cover-letters/' + props.job.duplicateKey, signal),
-            'cover-letter-' +
-                props.job.duplicateKey.replace(/:/g, '-') +
-                '.pdf',
-        );
+        await saveAndDownloadDocument(request);
     } catch (error) {
+        if (!isCurrentDocumentRequest(request)) return;
+        downloadError.value = 'Could not download the PDF. Please try again.';
         console.error(
-            'Failed to download cover letter:',
+            kind === 'application'
+                ? 'Failed to download application:'
+                : 'Failed to download cover letter:',
             error instanceof Error ? error.message : String(error),
         );
+    } finally {
+        if (isCurrentDocumentRequest(request)) {
+            documentRequest = null;
+            downloadStatus.value = null;
+        }
     }
+}
+
+function downloadCoverLetter() {
+    return downloadDocument('cover-letter');
+}
+
+function retryDocumentDownload() {
+    if (retryDocumentKind) void downloadDocument(retryDocumentKind);
 }
 
 async function downloadCv() {
@@ -209,20 +312,7 @@ async function downloadCv() {
 // "Download application" downloads that one document instead.
 async function downloadApplication() {
     if (letterDone.value && cvUploaded.value) {
-        try {
-            await applicationDownload.run(
-                (signal) =>
-                    getBlob('/application/' + props.job.duplicateKey, signal),
-                'application-' +
-                    props.job.duplicateKey.replace(/:/g, '-') +
-                    '.pdf',
-            );
-        } catch (error) {
-            console.error(
-                'Failed to download application:',
-                error instanceof Error ? error.message : String(error),
-            );
-        }
+        await downloadDocument('application');
     } else if (letterDone.value) {
         await downloadCoverLetter();
     } else if (cvUploaded.value) {
@@ -231,10 +321,9 @@ async function downloadApplication() {
 }
 
 onBeforeUnmount(() => {
+    cancelDocumentDownload();
     saveSession?.close();
     saveSession = null;
-    applicationDownload.abort();
-    coverLetterDownload.abort();
     cvDownload.abort();
     abortRevision();
 });
@@ -370,11 +459,28 @@ const statusLabel = computed(() => {
             @back="handleBack"
         />
 
+        <div
+            v-if="downloadStatus || downloadError"
+            class="editor__download-notice"
+        >
+            <p v-if="downloadStatus" role="status">{{ downloadStatus }}</p>
+            <p v-if="downloadError" role="alert">{{ downloadError }}</p>
+            <button
+                v-if="downloadError"
+                type="button"
+                class="editor__download-retry"
+                @click="retryDocumentDownload"
+            >
+                Try download again
+            </button>
+        </div>
+
         <!-- Application Editor menu -->
         <ApplicationEditorMenu
             v-if="view === 'menu'"
             :letter-done="letterDone"
             :cv-uploaded="cvUploaded"
+            :document-download-busy="documentDownloadBusy"
             @open-letter="view = 'letter'"
             @file-selected="onCvFileSelected"
             @download="downloadApplication"
@@ -407,5 +513,24 @@ const statusLabel = computed(() => {
     display: flex;
     flex-direction: column;
     background: var(--background-color);
+}
+.editor__download-notice {
+    padding: 12px 18px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-color);
+}
+.editor__download-notice p {
+    margin: 0;
+}
+.editor__download-retry {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
 }
 </style>

@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.3
+
+### Fixed
+
+- Cover-letter and combined application PDF downloads now wait for the latest
+  draft to finish saving, including edits made during an older upload. Saving
+  and downloading show progress and disable repeated requests. A failed save
+  stops the download and offers a retry; closing the editor or changing jobs
+  cancels the pending download (#98).
+
 ## v0.5.2
 
 ### Fixed

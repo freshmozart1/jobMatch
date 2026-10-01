@@ -58,3 +58,11 @@ unmount; session disposal removes UI listeners and flushes pending work through
 the same queue. A completed old upload must not mark a newer draft as saved.
 Regression coverage lives in `src/__tests__/CoverLetterSaveLifecycle.spec.ts`
 and uses deferred HTTP fixtures; do not exercise these races against live data.
+
+Letter-containing PDF downloads must await `session.flush()` and confirm the
+current draft is saved before the GET. A false result can mean a newer draft is
+still debounced: flush again unless the save failed. Keep the job key/session
+snapshot and an active-request guard across awaits; `active` becomes false as
+soon as the editor closes, before its exit transition unmounts it. Failed saves
+must show a retry action and must not request a stale PDF. Deferred download
+regressions live in `src/__tests__/CoverLetterDownloadPersistence.spec.ts`.

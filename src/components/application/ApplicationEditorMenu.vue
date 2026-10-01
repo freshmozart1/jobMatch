@@ -2,7 +2,14 @@
 import { CoverLetterAction } from '@/components/coverLetter';
 import CvFileInput from '@/components/CvFileInput.vue';
 
-defineProps<{ letterDone: boolean; cvUploaded: boolean }>();
+withDefaults(
+    defineProps<{
+        letterDone: boolean;
+        cvUploaded: boolean;
+        documentDownloadBusy?: boolean;
+    }>(),
+    { documentDownloadBusy: false },
+);
 defineEmits<{
     openLetter: [];
     fileSelected: [file: File];
@@ -21,6 +28,7 @@ defineEmits<{
 
         <CoverLetterAction
             :done="letterDone"
+            :download-busy="documentDownloadBusy"
             @click="$emit('openLetter')"
             @download="$emit('downloadCoverLetter')"
         />
@@ -34,7 +42,8 @@ defineEmits<{
         <button
             type="button"
             class="cl-download"
-            :disabled="!letterDone && !cvUploaded"
+            :disabled="documentDownloadBusy || (!letterDone && !cvUploaded)"
+            :aria-busy="documentDownloadBusy"
             @click="$emit('download')"
         >
             Download application
