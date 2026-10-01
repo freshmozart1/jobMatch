@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { getBlob, getJson, postFormData, postJson } from '@/lib/api';
+import { getBlob, postJson } from '@/lib/api';
+import { createCvUpload } from '@/lib/cvUpload';
 import {
     coverLetterSavesKey,
     createCoverLetterSaves,
@@ -43,7 +44,8 @@ function abortRevision() {
     resetRevision();
 }
 
-const cvUploaded = ref(false);
+const cvUpload = createCvUpload();
+const { uploaded: cvUploaded, notice: cvUploadNotice } = cvUpload;
 
 const letterDone = computed(() => text.value.trim().length > 0);
 
@@ -132,7 +134,7 @@ const cvDownload = createBlobDownload();
 
 watch(
     () => props.job.duplicateKey,
-    async (newKey) => {
+    (newKey) => {
         generationEpoch++;
         cancelDocumentDownload();
         abortRevision();
@@ -152,13 +154,9 @@ watch(
             restorationFailed.value = state.restorationFailed;
         });
         text.value = saveSession.initialText;
-        try {
-            await getJson(`/cv/${newKey}/status`);
-            if (newKey === props.job.duplicateKey) cvUploaded.value = true;
-        } catch {
-            // 404 → no CV on server; also covers network errors
-            if (newKey === props.job.duplicateKey) cvUploaded.value = false;
-        }
+        if (props.active)
+            cvUpload.open(newKey, saveSession.ensureJob.bind(saveSession));
+        else cvUpload.close();
     },
     { immediate: true },
 );
@@ -166,7 +164,13 @@ watch(
 watch(
     () => props.active,
     (active) => {
-        if (!active) {
+        if (active && saveSession) {
+            cvUpload.open(
+                props.job.duplicateKey,
+                saveSession.ensureJob.bind(saveSession),
+            );
+        } else {
+            cvUpload.close();
             generationEpoch++;
             cancelDocumentDownload();
         }
@@ -193,28 +197,11 @@ function handleBack() {
         abortRevision();
         view.value = 'menu';
     } else {
+        cvUpload.close();
         generationEpoch++;
         cancelDocumentDownload();
         void saveSession?.flush();
         emit('back');
-    }
-}
-
-async function onCvFileSelected(file: File) {
-    const keyAtStart = props.job.duplicateKey;
-    const jobCreated = await saveSession?.ensureJob();
-    if (!jobCreated || keyAtStart !== props.job.duplicateKey) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('jobDuplicateKey', keyAtStart);
-    try {
-        await postFormData('/cv/upload', formData);
-        if (keyAtStart === props.job.duplicateKey) cvUploaded.value = true;
-    } catch (error) {
-        console.error(
-            'Failed to upload CV:',
-            error instanceof Error ? error.message : error,
-        );
     }
 }
 
@@ -350,6 +337,7 @@ async function downloadApplication() {
 }
 
 onBeforeUnmount(() => {
+    cvUpload.close();
     cancelDocumentDownload();
     saveSession?.close();
     saveSession = null;
@@ -525,9 +513,11 @@ const statusLabel = computed(() => {
             v-if="view === 'menu'"
             :letter-done="letterDone"
             :cv-uploaded="cvUploaded"
+            :cv-upload-notice="cvUploadNotice"
             :document-download-busy="documentDownloadBusy"
             @open-letter="view = 'letter'"
-            @file-selected="onCvFileSelected"
+            @file-selected="cvUpload.select"
+            @retry-cv-upload="cvUpload.retry"
             @download="downloadApplication"
             @download-cover-letter="downloadCoverLetter"
             @download-cv="downloadCv"

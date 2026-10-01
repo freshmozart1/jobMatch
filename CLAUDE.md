@@ -117,3 +117,25 @@ conditionals; its bounded height is reserved in the card layout. Fixtures in
 mutable job data, new searches and ambiguous responses. Backend upsert makes
 identical retries converge by key; do not claim exactly-once HTTP after a lost
 response. The queue is page-local and does not survive reload.
+
+## CV upload recovery
+
+`createCvUpload()` in `src/lib/cvUpload.ts` owns the selected File, notice and
+attachment availability for one editor. `ApplicationEditorPage.vue` opens a
+fresh CV session after connecting its cover-letter save session; capture that
+session's `ensureJob` and duplicateKey before awaiting. Job/active/back/unmount
+changes invalidate old completions, including A/B/A identity reuse. Serialize
+writes by duplicateKey within the helper, not across independent jobs. A newer
+selection replaces retry intent and skips an obsolete queued file; duplicate
+retries cannot overlap. An acknowledged older selection can establish attachment
+availability in its current session, but cannot mark a newer file successful.
+Late status responses must not downgrade an acknowledged upload.
+
+`CvUploadNotice.vue` shows pending/success/error and explicit retry next to the
+CV input. Keep downloads of an existing attachment available when replacement
+fails. Do not claim rollback after HTTP/network uncertainty: the server persists
+before its response and exposes no file version. Retry retains the exact File;
+reset the native input after selection to permit choosing the same file again.
+`CvUploadRecovery.spec.ts` covers deferred upload/status/preparation and lifecycle
+races. State is editor-local; no cross-instance/tab/backend revision ordering is
+claimed, and status-fetch error UX remains a separate issue.
