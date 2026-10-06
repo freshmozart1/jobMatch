@@ -1,6 +1,6 @@
 {
     "name": "jobmatch",
-    "version": "0.5.10",
+    "version": "0.5.11",
     "private": true,
     "type": "module",
     "scripts": {
@@ -8,13 +8,14 @@
         "preview": "vite preview",
         "test:unit": "vitest",
         "test:e2e": "playwright test",
+        "test:lint-config": "node --test scripts/__tests__/eslint-config.mjs",
         "build": "vite build",
         "type-check": "vue-tsc --build",
         "lint": "eslint . --fix",
         "format": "prettier --write --experimental-cli src/"
     },
     "dependencies": {
-        "vue": "^3.5.32",
+        "vue": "^3.5.43",
         "vue-router": "^5.0.4"
     },
     "devDependencies": {
@@ -24,7 +25,6 @@
         "@types/node": "^24.12.2",
         "@vitejs/plugin-vue": "^6.0.6",
         "@vitest/eslint-plugin": "^1.6.16",
-        "@vue/eslint-config-typescript": "^14.7.0",
         "@vue/test-utils": "^2.4.6",
         "@vue/tsconfig": "^0.9.1",
         "eslint": "^10.2.1",
@@ -36,10 +36,13 @@
         "jsdom": "^29.0.2",
         "prettier": "3.8.3",
         "typescript": "~6.0.0",
+        "typescript-eslint": "^8.60.1",
+        "tinyglobby": "^0.2.15",
         "vite": "^8.0.8",
         "vite-plugin-vue-devtools": "^8.1.1",
         "vitest": "^4.1.4",
-        "vue-tsc": "^3.2.6"
+        "vue-tsc": "^3.2.6",
+        "vue-eslint-parser": "^10.4.0"
     },
     "engines": {
         "node": "^20.19.0 || >=22.12.0"

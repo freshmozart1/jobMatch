@@ -226,6 +226,7 @@ default do the right thing.
 | `npm run format`     | Formats `src/` with Prettier                                        |
 | `npm run test:unit`  | Vitest unit tests (watch mode; append `-- --run` for a single pass) |
 | `npm run test:e2e`   | Playwright end-to-end tests                                         |
+| `npm run test:lint-config` | Node integration checks for the ESLint configuration          |
 
 ## Testing
 
@@ -234,6 +235,25 @@ Unit tests live in `src/__tests__/` and run under Vitest with jsdom:
 ```sh
 npm run test:unit -- --run
 ```
+
+The ESLint configuration in `eslint.config.ts` composes `typescript-eslint`,
+`eslint-plugin-vue` and `vue-eslint-parser` directly. `tinyglobby` groups Vue
+files by their TypeScript script blocks so template-only components can retain
+Vue rules without requiring a TypeScript project. This removes the former
+`@vue/eslint-config-typescript` → `fast-glob` → `micromatch` → `braces`
+dependency path while retaining typed rules and the existing Vue component
+type exemptions.
+
+Run the configuration integration checks separately:
+
+```sh
+npm run test:lint-config
+```
+
+The three checks exercise type-aware promise errors in TypeScript and Vue,
+duplicate Vue template attributes, and template-only components. They cover
+these representative cases; they do not exhaust every parser syntax or lint
+rule. Continue running `npm run lint` over the full repository.
 
 End-to-end tests live in `e2e/` and run under Playwright. Install the browsers
 once before the first run:
