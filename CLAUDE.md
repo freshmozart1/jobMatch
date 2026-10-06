@@ -10,8 +10,8 @@ Vue 3 + TypeScript + Vite frontend. Package manager: npm.
 
 ```bash
 npm run dev          # dev server on http://0.0.0.0:5173
-npm run build        # Vite build (parallel)
-npm run type-check   # vue-tsc --build
+npm run build        # Vite build; run type-check first
+npm run type-check   # offline wire contract validation + vue-tsc --build
 
 npm run lint         # ESLint with --fix
 npm run format       # Prettier with --experimental-cli on src/
@@ -19,6 +19,11 @@ npm run format       # Prettier with --experimental-cli on src/
 npm run test:unit    # Vitest unit tests
 npm run test:e2e     # Playwright e2e tests
 npm run test:lint-config # Node ESLint configuration integration checks
+npm run check:wire-contract           # offline snapshot/provenance/semantics
+npm run check:wire-contract:upstream  # exact pinned source through gh
+npm run test:wire-contract            # Node integrity regressions
+# Replace NEW_SERVER_COMMIT_SHA with a full immutable 40-character server SHA:
+npm run sync:wire-contract -- NEW_SERVER_COMMIT_SHA
 ```
 
 ## Code Style
@@ -46,6 +51,38 @@ and type-check too.
 
 - `@/*` → `src/*`
 - `@pages` → `src/pages/index.ts`
+
+## Server wire contract
+
+`jobMatchServer/src/types.ts` is the canonical source. Keep
+`src/contracts/jobMatchServer.d.ts` byte-exact with the full server commit and
+SHA-256 recorded in `src/contracts/jobMatchServer.json`; do not hand-maintain
+local copies. The current pin is `9d71e0c1ebe69fda79d2bc0b239b8d9643b385e9`.
+Existing job-card and scrape-stream type modules re-export this snapshot, with
+progress frames derived using `Extract`. Guard optional `sourceJobId`,
+`location`, `postedAt` and `tags`; preserve the discriminated stream and
+exhaustive consumer switch. These type-only exports add no server runtime
+dependencies and require no rendering changes.
+
+`npm run type-check` verifies integrity and declaration semantics offline
+before compiling consumers. The validator uses `skipLibCheck: false`, no
+external resolution or ambient packages, and only TypeScript's ES5 standard
+library. Preserve rejection of runtime statements, normal/inline imports,
+external triple-slash references, unresolved aliases, DOM/Node dependencies
+and missing public wire exports. Sync validates before writing the declaration
+snapshot or its manifest. The build script itself only runs Vite.
+
+After a server wire-type change, select a new full commit SHA, run
+`npm run sync:wire-contract -- NEW_SERVER_COMMIT_SHA`, inspect both generated
+files, and run the upstream check, type-check, Node integrity tests, unit tests
+and build. Sync/upstream checks require `gh` access to the server repository;
+normal compiler and CI checks remain offline. A moving server branch is not
+automatically checked: updating this pin is a reviewed dependency change.
+
+Keep `scripts/wire-contract-checks.mjs` registered as the exact test entry in
+`.fallowrc.json`. Its nine regressions cover the core validator; Fallow's
+reachability estimate does not measure all CLI branches. Compiler/minimal-job
+rendering regressions live in `src/__tests__/WireContract.spec.ts`.
 
 ## Scrape stream
 

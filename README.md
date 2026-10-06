@@ -216,17 +216,67 @@ default do the right thing.
 
 ## Commands
 
-| Command              | What it does                                                        |
-| -------------------- | ------------------------------------------------------------------- |
-| `npm run dev`        | Vite dev server with hot reload on `http://0.0.0.0:5173`            |
-| `npm run build`      | Production build into `dist/`                                       |
-| `npm run preview`    | Serves the built `dist/` locally on `http://localhost:4173`         |
-| `npm run type-check` | Type-checks the project with `vue-tsc --build`                      |
-| `npm run lint`       | Runs ESLint over the repo with `--fix`                              |
-| `npm run format`     | Formats `src/` with Prettier                                        |
-| `npm run test:unit`  | Vitest unit tests (watch mode; append `-- --run` for a single pass) |
-| `npm run test:e2e`   | Playwright end-to-end tests                                         |
-| `npm run test:lint-config` | Node integration checks for the ESLint configuration          |
+| Command                                         | What it does                                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| `npm run dev`                                   | Vite dev server with hot reload on `http://0.0.0.0:5173`                       |
+| `npm run build`                                 | Production build into `dist/`                                                  |
+| `npm run preview`                               | Serves the built `dist/` locally on `http://localhost:4173`                    |
+| `npm run type-check`                            | Verifies the pinned wire contract offline, then runs `vue-tsc --build`         |
+| `npm run lint`                                  | Runs ESLint over the repo with `--fix`                                         |
+| `npm run format`                                | Formats `src/` with Prettier                                                   |
+| `npm run test:unit`                             | Vitest unit tests (watch mode; append `-- --run` for a single pass)            |
+| `npm run test:e2e`                              | Playwright end-to-end tests                                                    |
+| `npm run test:lint-config`                      | Node integration checks for the ESLint configuration                           |
+| `npm run check:wire-contract`                   | Checks the local contract digest, provenance and declaration semantics offline |
+| `npm run check:wire-contract:upstream`          | Compares the snapshot with its exact pinned source through GitHub CLI          |
+| `npm run sync:wire-contract -- <server-commit>` | Refreshes the snapshot from a full immutable server commit SHA                 |
+| `npm run test:wire-contract`                    | Runs the Node integrity and self-containment regressions                       |
+
+### Server wire types
+
+The canonical job and scrape-stream declarations live in
+[jobMatchServer/src/types.ts](https://github.com/freshmozart1/jobMatchServer/blob/9d71e0c1ebe69fda79d2bc0b239b8d9643b385e9/src/types.ts).
+`src/contracts/jobMatchServer.d.ts` is a byte-exact snapshot of server commit
+`9d71e0c1ebe69fda79d2bc0b239b8d9643b385e9`. The adjacent
+`src/contracts/jobMatchServer.json` records the repository, source path, full
+commit and SHA-256 digest
+`ba178f538e7f6871892391e628bf2ad603c0e68663f82e4e526d2ca0c2d75e64`.
+Keep both files generated from the server source; review synchronization changes
+as you would a pinned dependency update.
+
+The existing frontend import paths re-export these declarations:
+`src/components/jobCard/types.ts` supplies `CompanyAddress` and `ScrapedJob`,
+while `src/pages/match/scrapeStream.ts` supplies `ScrapeStreamFrame` and derives
+`ScrapeProgressFrame` from its discriminated union. The compiler now requires
+guards for optional `sourceJobId`, `location`, `postedAt` and `tags`. This changes
+type checking without adding server runtime dependencies or changing rendering.
+
+`npm run type-check` and the Wire contract workflow verify the local snapshot
+offline. Validation checks the digest and pinned provenance, requires the public
+wire exports, and checks declaration semantics against only TypeScript's ES5
+standard library with `skipLibCheck: false`. Runtime declarations, imports,
+external triple-slash references, unresolved types and ambient DOM/Node
+dependencies are rejected. Run `npm run type-check` before `npm run build`;
+the Vite build itself only bundles the frontend.
+
+When the server wire declarations change, choose the new full 40-character
+server commit and refresh this frontend pin. Replace `NEW_SERVER_COMMIT_SHA`
+below with that commit. These explicit network commands require GitHub CLI
+and access to the server repository:
+
+```sh
+npm run sync:wire-contract -- NEW_SERVER_COMMIT_SHA
+npm run check:wire-contract:upstream
+npm run type-check
+npm run test:wire-contract
+npm run test:unit -- --run
+npm run build
+```
+
+Synchronization validates the downloaded declarations before writing either
+file. Inspect and commit the snapshot and provenance manifest together. The
+upstream check compares the recorded commit; changes on server `master` do not
+automatically refresh the pin or fail an offline check.
 
 ## Testing
 
@@ -254,6 +304,13 @@ The three checks exercise type-aware promise errors in TypeScript and Vue,
 duplicate Vue template attributes, and template-only components. They cover
 these representative cases; they do not exhaust every parser syntax or lint
 rule. Continue running `npm run lint` over the full repository.
+
+The wire-contract checks in `scripts/wire-contract-checks.mjs` use Node's test
+runner (`npm run test:wire-contract`). They exercise integrity and isolated
+declaration validation; `src/__tests__/WireContract.spec.ts` checks compiler
+optionality, stream shapes and rendering with optional metadata absent. Fallow
+declares the exact Node suite as a test entry in `.fallowrc.json`; its static
+coverage estimate is not measured CLI branch coverage.
 
 End-to-end tests live in `e2e/` and run under Playwright. Install the browsers
 once before the first run:
@@ -296,6 +353,7 @@ src/
 ├── components/     Job cards, brand bar, match filter, scrape cancel,
 │                   application editor, cover letter and CV UI
 ├── lib/            API client (base URL resolution, JSON/SSE/blob helpers)
+├── contracts/      Pinned server declarations and provenance manifest
 ├── constants/      CSS custom properties for colors, layout and typography
 ├── router/         vue-router setup
 ├── mockups/        Reference `/scrape/linkedin` payload (not imported anywhere)
