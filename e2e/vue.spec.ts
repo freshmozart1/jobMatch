@@ -290,20 +290,35 @@ for (const failure of ['http', 'network'] as const) {
             exact: true,
         });
         await expect(download).toBeDisabled();
-        const retry = editor.getByRole('button', { name: 'Retry CV lookup' });
+        const retry = editor.locator('[data-testid="cv-lookup-notice"] button');
         await expect(retry).toBeVisible();
-        await retry.click();
+        await retry.focus();
+        await page.keyboard.press('Enter');
         await expect.poll(() => attempts.length).toBe(2);
         await expect(editor).toContainText('Checking for an attached CV');
-        await expect(retry).toHaveCount(0);
+        await expect(retry).toBeFocused();
+        await expect(retry).toHaveAttribute('aria-disabled', 'true');
+        await page.keyboard.press('Enter');
+        expect(attempts).toHaveLength(2);
         await expect(download).toBeDisabled();
         await attempts[1].fulfill({
+            status: 500,
+            body: JSON.stringify({ error: 'Internal server error' }),
+        });
+        await expect(retry).toHaveText('Retry CV lookup');
+        await expect(retry).toBeFocused();
+        await expect(retry).toHaveAttribute('aria-disabled', 'false');
+        await page.keyboard.press('Enter');
+        await expect.poll(() => attempts.length).toBe(3);
+        await expect(retry).toBeFocused();
+        await attempts[2].fulfill({
             status: 200,
             body: JSON.stringify({ message: 'CV exists' }),
         });
         await expect(editor).toContainText('PDF attached');
         await expect(editor.getByRole('alert')).toHaveCount(0);
         await expect(download).toBeEnabled();
+        await expect(download).toBeFocused();
         const widths = await editor.evaluate((element) => ({
             client: element.clientWidth,
             scroll: element.scrollWidth,

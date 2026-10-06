@@ -185,7 +185,10 @@ describe('CV upload recovery', () => {
             await flushPromises();
             expect(statuses).toHaveLength(2);
             expect(wrapper.text()).toContain('Checking for an attached CV');
-            expect(lookupNotice().exists()).toBe(false);
+            expect(
+                lookupNotice().find('button').attributes('aria-disabled'),
+            ).toBe('true');
+            expect(lookupNotice().find('[role="status"]').exists()).toBe(true);
             statuses[1]!.resolve(response(200));
             await flushPromises();
             expect(wrapper.text()).toContain('PDF attached');

@@ -1,8 +1,82 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import CvFileInput from '@/components/CvFileInput.vue';
 
 describe('CvFileInput', () => {
+    describe('lookup retry focus', () => {
+        it.each(['missing', 'available'] as const)(
+            'retains focus across pending and repeated failure, then transfers it after %s',
+            async (result) => {
+                const wrapper = mount(CvFileInput, {
+                    props: { uploaded: false, lookupState: 'error' },
+                    attachTo: document.body,
+                });
+                try {
+                    const retry = wrapper.find(
+                        '[data-testid="cv-lookup-notice"] button',
+                    );
+                    (retry.element as HTMLButtonElement).focus();
+                    await retry.trigger('click');
+                    await wrapper.setProps({ lookupState: 'loading' });
+                    expect(document.activeElement).toBe(retry.element);
+                    expect(retry.attributes('aria-disabled')).toBe('true');
+                    expect(retry.attributes('disabled')).toBeUndefined();
+                    await retry.trigger('click');
+                    expect(wrapper.emitted('retryStatus')).toHaveLength(1);
+                    await wrapper.setProps({ lookupState: 'error' });
+                    expect(document.activeElement).toBe(retry.element);
+                    expect(retry.attributes('aria-disabled')).toBe('false');
+                    await retry.trigger('click');
+                    expect(wrapper.emitted('retryStatus')).toHaveLength(2);
+                    await wrapper.setProps({ lookupState: 'loading' });
+                    await wrapper.setProps({
+                        lookupState: result,
+                        uploaded: result === 'available',
+                    });
+                    await flushPromises();
+                    expect(
+                        wrapper
+                            .find('[data-testid="cv-lookup-notice"]')
+                            .exists(),
+                    ).toBe(false);
+                    expect(document.activeElement).toBe(
+                        wrapper.find(
+                            result === 'available'
+                                ? '.cl-action__dl'
+                                : '.cl-action__row',
+                        ).element,
+                    );
+                } finally {
+                    wrapper.unmount();
+                }
+            },
+        );
+
+        it('does not move focus back when the user left retry during a pending check', async () => {
+            const wrapper = mount(CvFileInput, {
+                props: { uploaded: false, lookupState: 'error' },
+                attachTo: document.body,
+            });
+            try {
+                const retry = wrapper.find(
+                    '[data-testid="cv-lookup-notice"] button',
+                );
+                (retry.element as HTMLButtonElement).focus();
+                await retry.trigger('click');
+                await wrapper.setProps({ lookupState: 'loading' });
+                const picker = wrapper.find('.cl-action__row');
+                (picker.element as HTMLButtonElement).focus();
+                await wrapper.setProps({
+                    lookupState: 'available',
+                    uploaded: true,
+                });
+                expect(document.activeElement).toBe(picker.element);
+            } finally {
+                wrapper.unmount();
+            }
+        });
+    });
+
     describe('conditional text (uploaded prop)', () => {
         it('shows "Attach a PDF file" when not uploaded', () => {
             const wrapper = mount(CvFileInput, { props: { uploaded: false } });

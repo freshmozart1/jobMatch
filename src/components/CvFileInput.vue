@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import type { CvLookupState } from '@/lib/cvUpload';
 
 const props = defineProps<{ uploaded: boolean; lookupState?: CvLookupState }>();
@@ -18,6 +18,42 @@ const attachmentText = computed(() => {
 });
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const filePickerButtonRef = ref<HTMLButtonElement | null>(null);
+const downloadButtonRef = ref<HTMLButtonElement | null>(null);
+const retryButtonRef = ref<HTMLButtonElement | null>(null);
+const showLookupNotice = ref(props.lookupState === 'error');
+
+watch(
+    () => props.lookupState,
+    async (state) => {
+        if (state === 'error') {
+            showLookupNotice.value = true;
+            return;
+        }
+        // Keep the same focusable retry control while its request is pending.
+        if (state === 'loading') return;
+        const transferFocus =
+            document.activeElement === retryButtonRef.value &&
+            (state === 'available' || state === 'missing');
+        showLookupNotice.value = false;
+        if (!transferFocus) return;
+        await nextTick();
+        // Closing/changing the editor or moving focus takes precedence.
+        if (
+            props.lookupState !== state ||
+            document.activeElement !== document.body
+        )
+            return;
+        if (props.uploaded) downloadButtonRef.value?.focus();
+        else filePickerButtonRef.value?.focus();
+    },
+);
+
+function retryStatus() {
+    // aria-disabled retains keyboard focus; the request guard also prevents
+    // Enter, Space and pointer activation from starting duplicate checks.
+    if (props.lookupState === 'error') emit('retryStatus');
+}
 
 function openFilePicker() {
     fileInputRef.value?.click();
@@ -35,6 +71,7 @@ function onChange(event: Event) {
 <template>
     <div class="cl-action">
         <button
+            ref="filePickerButtonRef"
             type="button"
             class="cl-action__row"
             :aria-busy="lookupState === 'loading'"
@@ -69,6 +106,7 @@ function onChange(event: Event) {
             </span>
         </button>
         <button
+            ref="downloadButtonRef"
             type="button"
             class="cl-action__dl"
             :disabled="!uploaded"
@@ -96,16 +134,30 @@ function onChange(event: Event) {
     </div>
 
     <div
-        v-if="lookupState === 'error' && !uploaded"
+        v-if="showLookupNotice && !uploaded"
         class="cv-lookup-notice"
         data-testid="cv-lookup-notice"
     >
-        <p id="cv-lookup-error" role="alert">
-            Could not check whether a CV is attached. Check your connection and
-            try again.
+        <p
+            id="cv-lookup-error"
+            :role="lookupState === 'loading' ? 'status' : 'alert'"
+        >
+            <template v-if="lookupState === 'loading'">
+                Checking whether a CV is attached…
+            </template>
+            <template v-else>
+                Could not check whether a CV is attached. Check your connection
+                and try again.
+            </template>
         </p>
-        <button type="button" @click="$emit('retryStatus')">
-            Retry CV lookup
+        <button
+            ref="retryButtonRef"
+            type="button"
+            :aria-disabled="lookupState === 'loading'"
+            :aria-busy="lookupState === 'loading'"
+            @click="retryStatus"
+        >
+            {{ lookupState === 'loading' ? 'Checking CV…' : 'Retry CV lookup' }}
         </button>
     </div>
 
@@ -241,5 +293,10 @@ function onChange(event: Event) {
     background: transparent;
     font: inherit;
     cursor: pointer;
+}
+
+.cv-lookup-notice button[aria-disabled='true'] {
+    opacity: 0.6;
+    cursor: default;
 }
 </style>
