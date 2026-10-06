@@ -18,11 +18,29 @@ npm run format       # Prettier with --experimental-cli on src/
 
 npm run test:unit    # Vitest unit tests
 npm run test:e2e     # Playwright e2e tests
+npm run test:lint-config # Node ESLint configuration integration checks
 ```
 
 ## Code Style
 
 - `noUncheckedIndexedAccess: true` — always guard array/object lookups
+
+## ESLint configuration
+
+`eslint.config.ts` uses native flat configuration with direct
+`typescript-eslint`, `eslint-plugin-vue` and `vue-eslint-parser` dependencies.
+`tinyglobby` groups Vue files from disk: `<script lang="ts">` and
+`<script setup lang="ts">` enable project services, while template-only
+components keep Vue rules with type-aware rules disabled. Script blocks remain
+limited to TypeScript. Preserve the existing Vue component type exemptions,
+Vitest/Playwright rules and build/coverage ignores when changing this setup.
+
+Do not restore `@vue/eslint-config-typescript` without checking its dependency
+tree: the removed wrapper brought in `fast-glob` → `micromatch` → `braces`.
+`npm run test:lint-config` runs three checks for typed promise errors, Vue
+template rules and template-only parsing. These are representative integration
+checks, not exhaustive rule or parser compatibility coverage; run full lint
+and type-check too.
 
 ## Path Aliases
 

@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.11
+
+### Fixed
+
+- Update the Vue runtime/compiler/server-renderer family to `3.5.43` and
+  `source-map-js` to `1.2.2`, removing the affected locked dependency paths
+  reported by the full and production npm audits (#118).
+- Replace `@vue/eslint-config-typescript` with direct typed TypeScript/Vue
+  ESLint configuration to remove its unpatched `fast-glob` → `micromatch` →
+  `braces` chain. Preserve typed rules, template-only components and existing
+  Vue component type exemptions; add three `test:lint-config` integration
+  checks and document their coverage limits (#118).
+
 ## v0.5.10
 
 ### Fixed
