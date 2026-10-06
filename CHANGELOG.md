@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.10
+
+### Fixed
+
+- Failed AI cover letter generation now shows a safe, accessible alert beside
+  the AI button and lets you retry with the same control when the attempt
+  finishes. Manual drafts remain available; retry and editor/job lifecycle
+  resets clear the alert, and late failures cannot reach another session.
+  Draft restoration failures retain their separate save retry (#87).
+
 ## v0.5.9
 
 ### Fixed
