@@ -1,10 +1,59 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import type { CvLookupState } from '@/lib/cvUpload';
 
-defineProps<{ uploaded: boolean }>();
-const emit = defineEmits<{ fileSelected: [file: File]; download: [] }>();
+const props = defineProps<{ uploaded: boolean; lookupState?: CvLookupState }>();
+const emit = defineEmits<{
+    fileSelected: [file: File];
+    download: [];
+    retryStatus: [];
+}>();
+
+const attachmentText = computed(() => {
+    if (props.uploaded) return 'PDF attached';
+    if (props.lookupState === 'loading') return 'Checking for an attached CV…';
+    if (props.lookupState === 'error') return 'CV status unavailable';
+    if (props.lookupState === 'unknown') return 'CV status not checked';
+    return 'Attach a PDF file';
+});
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const filePickerButtonRef = ref<HTMLButtonElement | null>(null);
+const downloadButtonRef = ref<HTMLButtonElement | null>(null);
+const retryButtonRef = ref<HTMLButtonElement | null>(null);
+const showLookupNotice = ref(props.lookupState === 'error');
+
+watch(
+    () => props.lookupState,
+    async (state) => {
+        if (state === 'error') {
+            showLookupNotice.value = true;
+            return;
+        }
+        // Keep the same focusable retry control while its request is pending.
+        if (state === 'loading') return;
+        const transferFocus =
+            document.activeElement === retryButtonRef.value &&
+            (state === 'available' || state === 'missing');
+        showLookupNotice.value = false;
+        if (!transferFocus) return;
+        await nextTick();
+        // Closing/changing the editor or moving focus takes precedence.
+        if (
+            props.lookupState !== state ||
+            document.activeElement !== document.body
+        )
+            return;
+        if (props.uploaded) downloadButtonRef.value?.focus();
+        else filePickerButtonRef.value?.focus();
+    },
+);
+
+function retryStatus() {
+    // aria-disabled retains keyboard focus; the request guard also prevents
+    // Enter, Space and pointer activation from starting duplicate checks.
+    if (props.lookupState === 'error') emit('retryStatus');
+}
 
 function openFilePicker() {
     fileInputRef.value?.click();
@@ -21,7 +70,16 @@ function onChange(event: Event) {
 
 <template>
     <div class="cl-action">
-        <button type="button" class="cl-action__row" @click="openFilePicker">
+        <button
+            ref="filePickerButtonRef"
+            type="button"
+            class="cl-action__row"
+            :aria-busy="lookupState === 'loading'"
+            :aria-describedby="
+                lookupState === 'error' ? 'cv-lookup-error' : undefined
+            "
+            @click="openFilePicker"
+        >
             <span class="cl-action__icon">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path
@@ -42,12 +100,13 @@ function onChange(event: Event) {
             </span>
             <span class="cl-action__text">
                 <span class="cl-action__title">Curriculum Vitae</span>
-                <span class="cl-action__sub">{{
-                    uploaded ? 'PDF attached' : 'Attach a PDF file'
+                <span class="cl-action__sub" aria-live="polite">{{
+                    attachmentText
                 }}</span>
             </span>
         </button>
         <button
+            ref="downloadButtonRef"
             type="button"
             class="cl-action__dl"
             :disabled="!uploaded"
@@ -71,6 +130,34 @@ function onChange(event: Event) {
                     stroke-linejoin="round"
                 />
             </svg>
+        </button>
+    </div>
+
+    <div
+        v-if="showLookupNotice && !uploaded"
+        class="cv-lookup-notice"
+        data-testid="cv-lookup-notice"
+    >
+        <p
+            id="cv-lookup-error"
+            :role="lookupState === 'loading' ? 'status' : 'alert'"
+        >
+            <template v-if="lookupState === 'loading'">
+                Checking whether a CV is attached…
+            </template>
+            <template v-else>
+                Could not check whether a CV is attached. Check your connection
+                and try again.
+            </template>
+        </p>
+        <button
+            ref="retryButtonRef"
+            type="button"
+            :aria-disabled="lookupState === 'loading'"
+            :aria-busy="lookupState === 'loading'"
+            @click="retryStatus"
+        >
+            {{ lookupState === 'loading' ? 'Checking CV…' : 'Retry CV lookup' }}
         </button>
     </div>
 
@@ -186,5 +273,30 @@ function onChange(event: Event) {
     font-size: 12px;
     font-weight: 500;
     color: var(--border-color);
+}
+
+.cv-lookup-notice {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-color);
+}
+
+.cv-lookup-notice p {
+    margin: 0 0 8px;
+}
+
+.cv-lookup-notice button {
+    padding: 8px 12px;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.cv-lookup-notice button[aria-disabled='true'] {
+    opacity: 0.6;
+    cursor: default;
 }
 </style>

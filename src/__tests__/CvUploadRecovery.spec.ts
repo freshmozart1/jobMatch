@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import ApplicationEditorPage from '@/pages/match/ApplicationEditorPage.vue';
 import CvFileInput from '@/components/CvFileInput.vue';
+import { createCvUpload } from '@/lib/cvUpload';
 import type { ScrapedJob } from '@/components/jobCard/types';
 
 const job: ScrapedJob = {
@@ -34,6 +35,7 @@ const response = (status = 201) =>
     new Response(
         JSON.stringify({
             message: status >= 400 ? 'Synthetic rejection' : 'OK',
+            ...(status === 404 ? { error: 'CV not found' } : {}),
         }),
         { status },
     );
@@ -108,6 +110,204 @@ describe('CV upload recovery', () => {
     const notice = () => wrapper.find('[data-testid="cv-upload-notice"]');
     const retry = () => notice().find('button');
     const download = () => wrapper.find('[aria-label="Download CV"]');
+    const lookupNotice = () => wrapper.find('[data-testid="cv-lookup-notice"]');
+
+    it('shows a pending lookup without prompting for a new attachment', async () => {
+        await open(false, false);
+        expect(wrapper.text()).toContain('Checking for an attached CV');
+        expect(wrapper.text()).not.toContain('Attach a PDF file');
+        expect(download().attributes('disabled')).toBeDefined();
+        expect(lookupNotice().exists()).toBe(false);
+    });
+
+    it.each(['Job not found', 'CV not found'])(
+        'confirms no attachment only for the known 404 detail %s',
+        async (error) => {
+            await open(false, false);
+            statuses[0]!.resolve(
+                new Response(
+                    JSON.stringify({
+                        message: 'Error checking CV status',
+                        error,
+                    }),
+                    { status: 404 },
+                ),
+            );
+            await flushPromises();
+            expect(wrapper.text()).toContain('Attach a PDF file');
+            expect(lookupNotice().exists()).toBe(false);
+            expect(download().attributes('disabled')).toBeDefined();
+        },
+    );
+
+    for (const failure of [
+        'http',
+        'network',
+        'unexpected404',
+        'non404Missing',
+        'malformed404',
+        'invalidJson',
+    ] as const) {
+        it(`retries a ${failure} lookup without falsely claiming the CV is missing`, async () => {
+            await open(false, false);
+            if (failure === 'network')
+                statuses[0]!.reject(new TypeError('offline'));
+            else if (failure === 'http') statuses[0]!.resolve(response(500));
+            else if (failure === 'unexpected404')
+                statuses[0]!.resolve(
+                    new Response(JSON.stringify({ error: 'Route not found' }), {
+                        status: 404,
+                    }),
+                );
+            else if (failure === 'non404Missing')
+                statuses[0]!.resolve(
+                    new Response(JSON.stringify({ error: 'CV not found' }), {
+                        status: 500,
+                    }),
+                );
+            else
+                statuses[0]!.resolve(
+                    new Response('invalid json', {
+                        status: failure === 'invalidJson' ? 200 : 404,
+                    }),
+                );
+            await flushPromises();
+            expect(wrapper.text()).toContain('CV status unavailable');
+            expect(wrapper.text()).not.toContain('Attach a PDF file');
+            expect(lookupNotice().find('[role="alert"]').text()).toContain(
+                'Could not check whether a CV is attached',
+            );
+            expect(wrapper.text()).not.toContain('Route not found');
+            expect(download().attributes('disabled')).toBeDefined();
+            const retryLookup = lookupNotice().find('button');
+            await retryLookup.trigger('click');
+            await retryLookup.trigger('click');
+            await flushPromises();
+            expect(statuses).toHaveLength(2);
+            expect(wrapper.text()).toContain('Checking for an attached CV');
+            expect(
+                lookupNotice().find('button').attributes('aria-disabled'),
+            ).toBe('true');
+            expect(lookupNotice().find('[role="status"]').exists()).toBe(true);
+            statuses[1]!.resolve(response(200));
+            await flushPromises();
+            expect(wrapper.text()).toContain('PDF attached');
+            expect(download().attributes('disabled')).toBeUndefined();
+            expect(uploads).toHaveLength(0);
+        });
+    }
+
+    it('allows another lookup retry after failure and then confirms a missing attachment', async () => {
+        await open(false, false);
+        statuses[0]!.resolve(response(500));
+        await flushPromises();
+        await lookupNotice().find('button').trigger('click');
+        statuses[1]!.reject(new TypeError('still offline'));
+        await flushPromises();
+        expect(lookupNotice().find('[role="alert"]').exists()).toBe(true);
+        await lookupNotice().find('button').trigger('click');
+        statuses[2]!.resolve(response(404));
+        await flushPromises();
+        expect(wrapper.text()).toContain('Attach a PDF file');
+        expect(lookupNotice().exists()).toBe(false);
+    });
+
+    it('preserves upload failure feedback when a lookup retry discovers an attachment', async () => {
+        await open(false, false);
+        statuses[0]!.resolve(response(500));
+        await flushPromises();
+        await choose(pdf('replacement.pdf'));
+        uploads[0]!.response.resolve(response(500));
+        await flushPromises();
+        expect(notice().find('[role="alert"]').text()).toContain(
+            'replacement.pdf',
+        );
+        await lookupNotice().find('button').trigger('click');
+        statuses[1]!.resolve(response(200));
+        await flushPromises();
+        expect(notice().find('[role="alert"]').text()).toContain(
+            'replacement.pdf',
+        );
+        expect(notice().text()).toContain('an attached CV remains available');
+        expect(download().attributes('disabled')).toBeUndefined();
+        expect(lookupNotice().exists()).toBe(false);
+    });
+
+    it.each(['missing', 'error'] as const)(
+        'keeps an acknowledged upload available after a late %s lookup retry',
+        async (result) => {
+            await open(false, false);
+            statuses[0]!.resolve(response(500));
+            await flushPromises();
+            await lookupNotice().find('button').trigger('click');
+            await choose(pdf('acknowledged.pdf'));
+            uploads[0]!.response.resolve(response());
+            await flushPromises();
+            expect(wrapper.text()).toContain('PDF attached');
+            statuses[1]!.resolve(response(result === 'missing' ? 404 : 500));
+            await flushPromises();
+            expect(wrapper.text()).toContain('PDF attached');
+            expect(lookupNotice().exists()).toBe(false);
+            expect(download().attributes('disabled')).toBeUndefined();
+        },
+    );
+
+    it.each(['success', 'error'] as const)(
+        'ignores a late %s retry from an earlier A/B/A session',
+        async (result) => {
+            await open(false, false);
+            statuses[0]!.resolve(response(500));
+            await flushPromises();
+            await lookupNotice().find('button').trigger('click');
+            await wrapper.setProps({ job: jobB });
+            await wrapper.setProps({ job });
+            statuses[3]!.resolve(response(404));
+            await flushPromises();
+            statuses[1]!.resolve(response(result === 'success' ? 200 : 500));
+            await flushPromises();
+            expect(wrapper.text()).toContain('Attach a PDF file');
+            expect(lookupNotice().exists()).toBe(false);
+            expect(download().attributes('disabled')).toBeDefined();
+        },
+    );
+
+    it.each(['deactivate', 'back'] as const)(
+        'ignores a late retry after %s and reopening',
+        async (close) => {
+            await open(false, false);
+            statuses[0]!.resolve(response(500));
+            await flushPromises();
+            await lookupNotice().find('button').trigger('click');
+            if (close === 'deactivate')
+                await wrapper.setProps({ active: false });
+            else
+                await wrapper.find('.app-editor-header__back').trigger('click');
+            await wrapper.setProps({ active: false });
+            await wrapper.setProps({ active: true });
+            statuses[2]!.resolve(response(404));
+            await flushPromises();
+            statuses[1]!.reject(new TypeError('old failure'));
+            await flushPromises();
+            expect(wrapper.text()).toContain('Attach a PDF file');
+            expect(lookupNotice().exists()).toBe(false);
+        },
+    );
+
+    it('ignores a lookup completion and retry after the helper is disposed', async () => {
+        const cv = createCvUpload();
+        cv.open(job.duplicateKey, () => Promise.resolve(true));
+        statuses[0]!.reject(new TypeError('offline'));
+        await flushPromises();
+        expect(cv.lookupState.value).toBe('error');
+        cv.retryStatus();
+        cv.close();
+        statuses[1]!.resolve(response(200));
+        await flushPromises();
+        cv.retryStatus();
+        expect(cv.lookupState.value).toBe('unknown');
+        expect(cv.uploaded.value).toBe(false);
+        expect(statuses).toHaveLength(2);
+    });
 
     for (const existing of [false, true]) {
         for (const failure of ['http', 'network', 'validation'] as const) {

@@ -2,6 +2,17 @@ const API_BASE_URL =
     import.meta.env.VITE_JOB_MATCH_SERVER_URL ??
     `http://${window.location.hostname}:3000`;
 
+export class ApiError extends Error {
+    constructor(
+        readonly status: number,
+        message: string,
+        readonly serverError?: string,
+    ) {
+        super(message);
+        this.name = 'ApiError';
+    }
+}
+
 async function fetchWithErrorCheck(
     path: string,
     init?: RequestInit,
@@ -11,7 +22,7 @@ async function fetchWithErrorCheck(
             ? await fetch(`${API_BASE_URL}${path}`, init)
             : await fetch(`${API_BASE_URL}${path}`);
     if (!response.ok) {
-        throw new Error(await getResponseErrorMessage(response));
+        throw await getResponseError(response);
     }
     return response;
 }
@@ -102,7 +113,7 @@ export async function* postJsonEventStream<EventBody>(
     }
 }
 
-async function getResponseErrorMessage(response: Response): Promise<string> {
+async function getResponseError(response: Response): Promise<ApiError> {
     try {
         const errorBody = (await response.json()) as {
             error?: unknown;
@@ -111,13 +122,20 @@ async function getResponseErrorMessage(response: Response): Promise<string> {
         const serverMessage = errorBody.message ?? errorBody.error;
 
         if (typeof serverMessage === 'string' && serverMessage.length > 0) {
-            return serverMessage;
+            return new ApiError(
+                response.status,
+                serverMessage,
+                typeof errorBody.error === 'string'
+                    ? errorBody.error
+                    : undefined,
+            );
         }
     } catch {
         // Fall back to the status text below when the server did not return JSON.
     }
 
-    return (
-        response.statusText || `Request failed with status ${response.status}`
+    return new ApiError(
+        response.status,
+        response.statusText || `Request failed with status ${response.status}`,
     );
 }

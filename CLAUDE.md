@@ -186,7 +186,7 @@ mutable job data, new searches and ambiguous responses. Backend upsert makes
 identical retries converge by key; do not claim exactly-once HTTP after a lost
 response. The queue is page-local and does not survive reload.
 
-## CV upload recovery
+## CV upload and lookup recovery
 
 `createCvUpload()` in `src/lib/cvUpload.ts` owns the selected File, notice and
 attachment availability for one editor. `ApplicationEditorPage.vue` opens a
@@ -206,7 +206,30 @@ before its response and exposes no file version. Retry retains the exact File;
 reset the native input after selection to permit choosing the same file again.
 `CvUploadRecovery.spec.ts` covers deferred upload/status/preparation and lifecycle
 races. State is editor-local; no cross-instance/tab/backend revision ordering is
-claimed, and status-fetch error UX remains a separate issue.
+claimed.
+
+The same helper owns `lookupState`: `unknown` after reset, `loading` while a
+check is pending, `missing` for a known missing record, `available` after a
+successful status check or acknowledged upload, and `error` for a failed check.
+`ApiError` in `src/lib/api.ts` retains HTTP status and the separate server error
+detail without replacing the existing message. Among failed checks, 404
+responses with the known `Job not found` / `CV not found` detail confirm
+`missing`; unexpected 404s, other HTTP failures, network failures and invalid
+JSON remain errors.
+Retry only an errored current session and set loading synchronously to prevent
+overlapping checks. Keep lookup errors separate from upload notices and retain
+session identity plus acknowledged-upload precedence across every await.
+
+`CvFileInput.vue` shows a safe lookup alert and retry action. Keep that same
+button focusable during a retry with `aria-disabled` and a guarded handler,
+instead of removing or disabling the focused control. Repeated failure retains
+focus. After an available/missing result removes a focused retry, transfer focus
+to the enabled CV download/file-picker action only if the current lookup and
+document focus still permit it after rendering. Job/close/unmount changes and
+the user's focus movement take precedence. `CvFileInput.spec.ts` covers focus
+retention, both handoff targets and no focus theft; `CvUploadRecovery.spec.ts`
+covers deferred lookup retries and lifecycle races. Chromium checks HTTP/network
+failure, pending Enter suppression, repeated failure and download focus.
 
 ## Nested revision Escape
 

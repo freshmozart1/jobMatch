@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getBlob, getJson, postJson, postJsonEventStream } from '@/lib/api';
+import {
+    ApiError,
+    getBlob,
+    getJson,
+    postJson,
+    postJsonEventStream,
+} from '@/lib/api';
 import { createSseResponse } from './testUtils';
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
@@ -59,6 +65,35 @@ describe('getJson', () => {
             jsonResponse({ message: 'Bad input' }, { status: 400 }),
         );
         await expect(getJson('/fail')).rejects.toThrow('Bad input');
+    });
+
+    it('retains HTTP status and the separate curated error detail', async () => {
+        fetchMock.mockResolvedValue(
+            jsonResponse(
+                { message: 'Error checking CV status', error: 'Job not found' },
+                { status: 404 },
+            ),
+        );
+        await expect(getJson('/fail')).rejects.toMatchObject({
+            name: 'ApiError',
+            message: 'Error checking CV status',
+            status: 404,
+            serverError: 'Job not found',
+        });
+    });
+
+    it('keeps malformed HTTP failures distinct from network failures', async () => {
+        fetchMock.mockResolvedValueOnce(
+            new Response('not json', { status: 404 }),
+        );
+        await expect(getJson('/fail')).rejects.toMatchObject({
+            status: 404,
+            serverError: undefined,
+        });
+        const networkError = new TypeError('Failed to fetch');
+        fetchMock.mockRejectedValueOnce(networkError);
+        await expect(getJson('/fail')).rejects.toBe(networkError);
+        expect(networkError).not.toBeInstanceOf(ApiError);
     });
 
     it('falls back to statusText when the error body is not JSON', async () => {

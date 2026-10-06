@@ -47,6 +47,11 @@ to be running for jobMatch to do anything. See
   response does not prove which file the server retained. Uploads for the same
   job are ordered within one editor, while different jobs proceed independently.
   The selected file and retry state last until that editor session closes.
+  The CV row shows when its attachment check is pending or unavailable instead
+  of asking you to re-upload a stored document. A failed check offers "Retry CV
+  lookup". Keyboard focus stays on that control through pending checks and
+  repeated failures. When a check confirms whether a CV exists, focus moves to
+  the CV download or attachment action if you have not moved it elsewhere.
 - **Search** — up to five keywords plus a city, a search radius in kilometres
   and a "date posted" window (past 24 hours / week / month)
   (`src/pages/match/SearchPage.vue`). Everything is persisted in `localStorage`,
@@ -129,9 +134,17 @@ to be running for jobMatch to do anything. See
   editor sessions; it does not coordinate other tabs/devices or prevent a server
   request from writing after a timeout.
 - **CV and downloads** — attach a PDF CV (`src/components/CvFileInput.vue`,
-  `accept="application/pdf,.pdf"`). That component only emits the chosen file;
-  `ApplicationEditorPage.vue` uploads it (`POST /cv/upload`) and checks presence
-  (`GET /cv/<duplicateKey>/status`). Both are scoped to the job's
+  `accept="application/pdf,.pdf"`). That component emits the chosen file;
+  `ApplicationEditorPage.vue` connects an editor session to
+  `src/lib/cvUpload.ts`, which uploads it (`POST /cv/upload`) and checks presence
+  (`GET /cv/<duplicateKey>/status`). The helper distinguishes an unchecked,
+  pending, confirmed missing, available or failed lookup. For a failed request,
+  known `Job not found` or `CV not found` 404 details confirm a missing
+  attachment; unexpected 404s, server/network failures and invalid JSON show a
+  safe error with a lookup retry. Changing jobs or closing/reopening the editor
+  invalidates old results, and a confirmed upload takes precedence over a late
+  status response. Lookup retries keep the selected upload and its notice.
+  Both requests are scoped to the job's
   `duplicateKey`, so a CV is attached per job and has to be re-attached for the
   next one. Download the cover letter alone (`GET /cover-letters/<duplicateKey>`),
   the CV alone (`GET /cv/<duplicateKey>`), or both:

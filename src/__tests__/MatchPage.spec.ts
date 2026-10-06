@@ -744,8 +744,16 @@ describe('MatchPage', () => {
             const backButton = dialog.find(
                 `.${APPLICATION_EDITOR_HEADER_BACK_CLASS}`,
             );
-            const actionRows = dialog.findAll('.cl-action__row');
-            const lastAction = actionRows[actionRows.length - 1]!;
+            // This fixture rejects the CV lookup. Its retry joins the modal's
+            // tab order after the status response settles.
+            await vi.waitFor(() => {
+                expect(
+                    dialog.find('[data-testid="cv-lookup-notice"]').exists(),
+                ).toBe(true);
+            });
+            const lastAction = dialog.find(
+                '[data-testid="cv-lookup-notice"] button',
+            );
 
             (main.element as HTMLElement).focus();
             expect(document.activeElement).toBe(heading.element);
