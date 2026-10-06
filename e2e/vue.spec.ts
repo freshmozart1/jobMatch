@@ -691,6 +691,76 @@ test('keeps manual edits when generation finishes and restores the server draft'
     ).toBe(manualDraft);
 });
 
+test('shows a failed AI generation and lets the user retry while keeping the draft', async ({
+    page,
+}) => {
+    const generations: Route[] = [];
+    const draft = 'A preserved synthetic manual cover letter.';
+    await page.route('**/cover-letters/create/text', (route) => {
+        generations.push(route);
+    });
+    await page.route('**/jobs/create', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await page.route('**/cover-letters/upload/text', async (route) => {
+        await route.fulfill({ status: 201, body: '{}' });
+    });
+    await loadPopulatedMatchPage(page, { width: 320, height: 568 });
+    await page.evaluate(({ key, draft }) => localStorage.setItem(key, draft), {
+        key: `jobmatch.coverletter.${mockJob.duplicateKey}`,
+        draft,
+    });
+    await page
+        .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+        .click();
+    await page.locator('.cl-action__row').first().click();
+    const generate = page.getByRole('button', {
+        name: 'Generate cover letter with AI',
+    });
+    const textarea = page.locator('.cl-textarea');
+    await generate.click();
+    await expect.poll(() => generations.length).toBe(1);
+    await expect(generate).toBeDisabled();
+    await generations[0].abort('failed');
+    const alert = page.locator('.cl-generation-error');
+    await expect(alert).toBeVisible();
+    await expect(alert).toHaveRole('alert');
+    await expect(alert).toHaveText(
+        'Could not generate a cover letter. Please try again.',
+    );
+    await expect(generate).toHaveAccessibleDescription(
+        'Could not generate a cover letter. Please try again.',
+    );
+    await expect(generate).toBeEnabled();
+    await expect(textarea).toHaveValue(draft);
+    expect(
+        await page.evaluate(
+            (key) => localStorage.getItem(key),
+            `jobmatch.coverletter.${mockJob.duplicateKey}`,
+        ),
+    ).toBe(draft);
+    expect(
+        await alert.evaluate((element) => element.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+
+    await generate.click();
+    await expect.poll(() => generations.length).toBe(2);
+    await expect(alert).toHaveCount(0);
+    await expect(generate).toBeDisabled();
+    await generations[1].fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+            coverLetter: 'Successful AI retry.',
+            saved: true,
+        }),
+    });
+    await expect(textarea).toHaveValue('Successful AI retry.');
+    await expect(generate).toBeEnabled();
+    await expect(alert).toHaveCount(0);
+    expect(generations).toHaveLength(2);
+});
+
 test('downloads acknowledged generation after reopening without re-segmenting it', async ({
     page,
 }) => {
