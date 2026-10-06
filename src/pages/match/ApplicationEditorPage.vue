@@ -56,6 +56,7 @@ const saveStatus = ref<'idle' | 'pending' | 'saving' | 'saved' | 'error'>(
 );
 const jobCreateFailed = ref(false);
 const generating = ref(false);
+const generationError = ref<string | null>(null);
 const generationDiscarded = ref(false);
 const restorationFailed = ref(false);
 let generationEpoch = 0;
@@ -136,6 +137,7 @@ watch(
     () => props.job.duplicateKey,
     (newKey) => {
         generationEpoch++;
+        generationError.value = null;
         cancelDocumentDownload();
         abortRevision();
         saveSession?.close();
@@ -173,6 +175,7 @@ watch(
             cvUpload.close();
             abortRevision();
             generationEpoch++;
+            generationError.value = null;
             cancelDocumentDownload();
         }
     },
@@ -200,6 +203,7 @@ function handleBack() {
     } else {
         cvUpload.close();
         generationEpoch++;
+        generationError.value = null;
         cancelDocumentDownload();
         void saveSession?.flush();
         emit('back');
@@ -338,6 +342,7 @@ async function downloadApplication() {
 }
 
 onBeforeUnmount(() => {
+    generationError.value = null;
     cvUpload.close();
     cancelDocumentDownload();
     saveSession?.close();
@@ -349,10 +354,16 @@ onBeforeUnmount(() => {
 async function generateCoverLetter() {
     if (generating.value || revising.value || !saveSession || !props.active)
         return;
+    generationError.value = null;
     resetRevision();
     const session = saveSession;
     const epoch = generationEpoch;
     const keyAtStart = props.job.duplicateKey;
+    const isCurrentGeneration = () =>
+        props.active &&
+        epoch === generationEpoch &&
+        session === saveSession &&
+        keyAtStart === props.job.duplicateKey;
     // The endpoint never used the embedding — strip it from the request body.
     const { embedding, ...jobData } = props.job;
     void embedding;
@@ -364,13 +375,12 @@ async function generateCoverLetter() {
                     jobData,
                 ),
             storeDraftLocally,
-            () =>
-                props.active &&
-                epoch === generationEpoch &&
-                session === saveSession &&
-                keyAtStart === props.job.duplicateKey,
+            isCurrentGeneration,
         );
     } catch (error) {
+        if (!isCurrentGeneration()) return;
+        generationError.value =
+            'Could not generate a cover letter. Please try again.';
         console.error(
             'Failed to generate cover letter:',
             error instanceof Error ? error.message : String(error),
@@ -548,6 +558,7 @@ const statusLabel = computed(() => {
             :status-label="statusLabel"
             :words="words"
             :generating="generating"
+            :generation-error="generationError"
             :revising="revising"
             :revision-error="revisionError"
             @input="onChange"

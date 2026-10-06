@@ -110,7 +110,12 @@ to be running for jobMatch to do anything. See
   `src/components/coverLetter/CoverLetterEditor.vue` is presentational.
   Generation joins the same per-job queue: it waits for an older upload and
   holds newer uploads until the response arrives. You can keep typing while AI
-  works. If you edit, close the editor, or switch jobs, the generated response
+  works. If generation fails, an alert beside the AI button says "Could not
+  generate a cover letter. Please try again." Your manual draft stays available,
+  and the same button retries once the attempt finishes. Starting a retry or
+  closing the editor or changing jobs clears the alert; a delayed failure from
+  an old editor session cannot show it again. If you edit, close the editor,
+  or switch jobs, the generated response
   is discarded and the current draft is restored on the server, because the
   generation endpoint saves its result before replying. An accepted response
   with `saved: true` becomes the saved baseline without another plain-text

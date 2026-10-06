@@ -10,10 +10,16 @@ const props = withDefaults(
         statusLabel: string;
         words: number;
         generating?: boolean;
+        generationError?: string | null;
         revising?: boolean;
         revisionError?: string | null;
     }>(),
-    { generating: false, revising: false, revisionError: null },
+    {
+        generating: false,
+        generationError: null,
+        revising: false,
+        revisionError: null,
+    },
 );
 const emit = defineEmits<{
     input: [value: string];
@@ -269,6 +275,14 @@ function parseDescription(raw: string): Segment[] {
         </div>
     </div>
 
+    <p
+        v-if="generationError"
+        id="cl-generation-error"
+        class="cl-generation-error"
+        role="alert"
+    >
+        {{ generationError }}
+    </p>
     <div class="cl-meta">
         <span>{{ statusLabel }}</span>
         <button
@@ -276,6 +290,9 @@ function parseDescription(raw: string): Segment[] {
             :class="['cl-generate', { 'cl-generate--busy': generating }]"
             :disabled="generating || revising"
             aria-label="Generate cover letter with AI"
+            :aria-describedby="
+                generationError ? 'cl-generation-error' : undefined
+            "
             title="Generate with AI"
             @click="generateCoverLetter"
         >
@@ -528,6 +545,14 @@ function parseDescription(raw: string): Segment[] {
 .cl-revision__actions button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+}
+
+.cl-generation-error {
+    flex: 0 0 auto;
+    margin: 12px 20px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #a32342;
 }
 
 .cl-meta {

@@ -78,6 +78,19 @@ report unsaved state instead of acknowledging them. Use the persisted-state
 fixtures in `CoverLetterGenerationPersistence.spec.ts` for these races. This is
 page-local ordering, not cross-tab or backend revision control.
 
+Generation failures are editor-local UI state in `ApplicationEditorPage.vue`.
+`CoverLetterEditor.vue` renders a safe alert beside the AI button and associates
+it with `aria-describedby`; the same button becomes available to retry when the
+coordinator transaction finishes. Clear the error only for an accepted new
+attempt or a job/deactivation/outer-close/unmount reset. Both success and failure
+must check the current active state and captured generation epoch, session and
+job, so late failures cannot reach a reopened or different editor. Keep manual
+drafts and the coordinator's persistence/restoration behavior intact; restoration
+failures still have their own save retry. Deferred regressions in
+`CoverLetterGenerationRecovery.spec.ts` cover HTTP/network/invalid responses,
+retry, lifecycle races and separate restoration failures; Chromium also checks
+the accessible alert and retry at a compact mobile viewport.
+
 After the exact revision/session/lifecycle guards accept generation, only
 `response.saved === true` acknowledges its draft without a text upload. The
 coordinator owns that atomic draft/baseline update; the component callback only
