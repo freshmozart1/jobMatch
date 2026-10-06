@@ -170,6 +170,7 @@ describe('failed rating recovery', () => {
         await rate(false);
         await settle(0, 500);
         original.title = 'Changed later';
+        if (!original.tags) throw new Error('Expected fixture tags.');
         original.tags[0] = 'changed';
         original.embedding[0] = 99;
         original.companyAddresses[0]!.streetAddress = 'Changed later';

@@ -10,9 +10,13 @@
         "test:e2e": "playwright test",
         "test:lint-config": "node --test scripts/__tests__/eslint-config.mjs",
         "build": "vite build",
-        "type-check": "vue-tsc --build",
+        "type-check": "npm run check:wire-contract && vue-tsc --build",
         "lint": "eslint . --fix",
-        "format": "prettier --write --experimental-cli src/"
+        "format": "prettier --write --experimental-cli src/",
+        "check:wire-contract": "node scripts/wire-contract.mjs --check",
+        "check:wire-contract:upstream": "node scripts/wire-contract.mjs --check-upstream",
+        "sync:wire-contract": "node scripts/wire-contract.mjs --update",
+        "test:wire-contract": "node --test scripts/wire-contract-checks.mjs"
     },
     "dependencies": {
         "vue": "^3.5.43",

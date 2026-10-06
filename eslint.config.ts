@@ -127,6 +127,7 @@ export default defineConfig(
                 {
                     assertFunctionNames: [
                         'expect',
+                        'expectTypeOf',
                         'expectEndpointsCalled',
                         'expectSearchStopped',
                     ],
