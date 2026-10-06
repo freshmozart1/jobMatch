@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { basename, dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 const repository = 'freshmozart1/jobMatchServer';
@@ -36,6 +37,16 @@ export function validateDeclarations(source) {
         true,
         ts.ScriptKind.TS,
     );
+    if (
+        file.referencedFiles.length ||
+        file.typeReferenceDirectives.length ||
+        file.libReferenceDirectives.length ||
+        file.hasNoDefaultLib
+    ) {
+        throw new Error(
+            'The server contract must not contain triple-slash reference dependencies.',
+        );
+    }
     const exports = new Set();
     function checkSelfContained(node) {
         if (ts.isImportTypeNode(node)) {
@@ -68,6 +79,71 @@ export function validateDeclarations(source) {
     for (const name of ['CompanyAddress', 'ScrapedJob', 'ScrapeStreamFrame']) {
         if (!exports.has(name))
             throw new Error(`The server contract is missing ${name}.`);
+    }
+    validateDeclarationSemantics(source);
+}
+
+function validateDeclarationSemantics(source) {
+    // Check the declaration itself even when the consuming app skips library
+    // checking. Only the snapshot and TypeScript's built-in ES5 types can load;
+    // installed ambient packages, DOM types and neighboring files cannot hide
+    // dependencies that are absent from the source snapshot.
+    const options = {
+        noEmit: true,
+        strict: true,
+        skipLibCheck: false,
+        noResolve: true,
+        types: [],
+        lib: ['lib.es5.d.ts'],
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+    };
+    const contractPath = fileURLToPath(snapshotUrl);
+    const libraryDirectory = dirname(ts.getDefaultLibFilePath(options));
+    const baseHost = ts.createCompilerHost(options, true);
+    function isStandardLibrary(path) {
+        return (
+            dirname(resolve(path)) === libraryDirectory &&
+            /^lib(?:\.[\w.]+)?\.d\.ts$/.test(basename(path))
+        );
+    }
+    const host = {
+        ...baseHost,
+        getSourceFile(path, version, onError, shouldCreate) {
+            if (resolve(path) === contractPath) {
+                return ts.createSourceFile(contractPath, source, version, true);
+            }
+            return isStandardLibrary(path)
+                ? baseHost.getSourceFile(path, version, onError, shouldCreate)
+                : undefined;
+        },
+        readFile(path) {
+            if (resolve(path) === contractPath) return source;
+            return isStandardLibrary(path)
+                ? baseHost.readFile(path)
+                : undefined;
+        },
+        fileExists(path) {
+            return (
+                resolve(path) === contractPath ||
+                (isStandardLibrary(path) && baseHost.fileExists(path))
+            );
+        },
+        getDirectories() {
+            return [];
+        },
+    };
+    const program = ts.createProgram([contractPath], options, host);
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    if (diagnostics.length) {
+        const messages = diagnostics.map(
+            (diagnostic) =>
+                `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`,
+        );
+        throw new Error(
+            `The server contract is not self-contained: ${messages.join('; ')}`,
+        );
     }
 }
 

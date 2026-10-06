@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
@@ -74,4 +75,58 @@ test('rejects an upstream source without the required public wire declarations',
         () => validateDeclarations('export type SomethingElse = string;'),
         /missing CompanyAddress/,
     );
+});
+
+test('rejects unresolved aliases even when the snapshot digest is refreshed', () => {
+    const unresolved = source.replace(
+        'TextEmbedding = number[]',
+        'TextEmbedding = ServerOnlyEmbedding',
+    );
+    const refreshedManifest = {
+        ...manifest,
+        sha256: createHash('sha256').update(unresolved).digest('hex'),
+    };
+    assert.throws(
+        () => validateDeclarations(unresolved),
+        /TS2304.*ServerOnlyEmbedding/,
+    );
+    assert.throws(
+        () => verifySnapshot(unresolved, refreshedManifest),
+        /TS2304.*ServerOnlyEmbedding/,
+    );
+});
+
+test('does not obtain missing types from the app DOM or installed Node environment', () => {
+    for (const external of ['HTMLElement[]', 'NodeJS.Timeout']) {
+        const dependent = source.replace(
+            'TextEmbedding = number[]',
+            `TextEmbedding = ${external}`,
+        );
+        assert.throws(
+            () => validateDeclarations(dependent),
+            /not self-contained/,
+        );
+    }
+});
+
+test('rejects triple-slash file, ambient package and library references', () => {
+    for (const reference of [
+        'path="neighboring-types.d.ts"',
+        'types="node"',
+        'lib="dom"',
+    ]) {
+        const dependent = `/// <reference ${reference} />\n${source}`;
+        const refreshedManifest = {
+            ...manifest,
+            sha256: createHash('sha256').update(dependent).digest('hex'),
+        };
+        assert.throws(
+            () => validateDeclarations(dependent),
+            /triple-slash reference dependencies/,
+        );
+        assert.throws(
+            () => verifySnapshot(dependent, refreshedManifest),
+            /triple-slash reference dependencies/,
+        );
+    }
 });
