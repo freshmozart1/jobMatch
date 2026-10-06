@@ -7,9 +7,10 @@ All notable changes to this project are documented in this file.
 ### Fixed
 
 - CV lookup failures now show an explicit unavailable state and lookup retry
-  instead of claiming that an attachment is missing. Only known missing-job/CV
-  404 responses show the attachment prompt; late results cannot override another
-  editor session or an acknowledged upload. Upload recovery remains independent.
+  instead of claiming that an attachment is missing. Known missing-job/CV 404
+  responses confirm absence; other lookup failures offer retry. Late results
+  cannot override another editor session or an acknowledged upload. Upload
+  recovery remains independent.
   Keyboard retries retain focus through pending checks and repeated failures,
   then hand focus to the CV download or attachment action when appropriate (#88).
 

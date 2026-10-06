@@ -212,9 +212,10 @@ The same helper owns `lookupState`: `unknown` after reset, `loading` while a
 check is pending, `missing` for a known missing record, `available` after a
 successful status check or acknowledged upload, and `error` for a failed check.
 `ApiError` in `src/lib/api.ts` retains HTTP status and the separate server error
-detail without replacing the existing message. Only 404 responses with the
-known `Job not found` / `CV not found` detail confirm `missing`; unexpected
-404s, other HTTP failures, network failures and invalid JSON remain errors.
+detail without replacing the existing message. Among failed checks, 404
+responses with the known `Job not found` / `CV not found` detail confirm
+`missing`; unexpected 404s, other HTTP failures, network failures and invalid
+JSON remain errors.
 Retry only an errored current session and set loading synchronously to prevent
 overlapping checks. Keep lookup errors separate from upload notices and retain
 session identity plus acknowledged-upload precedence across every await.

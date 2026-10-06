@@ -138,8 +138,8 @@ to be running for jobMatch to do anything. See
   `ApplicationEditorPage.vue` connects an editor session to
   `src/lib/cvUpload.ts`, which uploads it (`POST /cv/upload`) and checks presence
   (`GET /cv/<duplicateKey>/status`). The helper distinguishes an unchecked,
-  pending, confirmed missing, available or failed lookup. Only a 404 carrying
-  the known `Job not found` or `CV not found` detail confirms a missing
+  pending, confirmed missing, available or failed lookup. For a failed request,
+  known `Job not found` or `CV not found` 404 details confirm a missing
   attachment; unexpected 404s, server/network failures and invalid JSON show a
   safe error with a lookup retry. Changing jobs or closing/reopening the editor
   invalidates old results, and a confirmed upload takes precedence over a late
