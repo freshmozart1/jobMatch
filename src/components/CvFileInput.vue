@@ -1,8 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import type { CvLookupState } from '@/lib/cvUpload';
 
-defineProps<{ uploaded: boolean }>();
-const emit = defineEmits<{ fileSelected: [file: File]; download: [] }>();
+const props = defineProps<{ uploaded: boolean; lookupState?: CvLookupState }>();
+const emit = defineEmits<{
+    fileSelected: [file: File];
+    download: [];
+    retryStatus: [];
+}>();
+
+const attachmentText = computed(() => {
+    if (props.uploaded) return 'PDF attached';
+    if (props.lookupState === 'loading') return 'Checking for an attached CV…';
+    if (props.lookupState === 'error') return 'CV status unavailable';
+    if (props.lookupState === 'unknown') return 'CV status not checked';
+    return 'Attach a PDF file';
+});
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
@@ -21,7 +34,15 @@ function onChange(event: Event) {
 
 <template>
     <div class="cl-action">
-        <button type="button" class="cl-action__row" @click="openFilePicker">
+        <button
+            type="button"
+            class="cl-action__row"
+            :aria-busy="lookupState === 'loading'"
+            :aria-describedby="
+                lookupState === 'error' ? 'cv-lookup-error' : undefined
+            "
+            @click="openFilePicker"
+        >
             <span class="cl-action__icon">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path
@@ -42,8 +63,8 @@ function onChange(event: Event) {
             </span>
             <span class="cl-action__text">
                 <span class="cl-action__title">Curriculum Vitae</span>
-                <span class="cl-action__sub">{{
-                    uploaded ? 'PDF attached' : 'Attach a PDF file'
+                <span class="cl-action__sub" aria-live="polite">{{
+                    attachmentText
                 }}</span>
             </span>
         </button>
@@ -71,6 +92,20 @@ function onChange(event: Event) {
                     stroke-linejoin="round"
                 />
             </svg>
+        </button>
+    </div>
+
+    <div
+        v-if="lookupState === 'error' && !uploaded"
+        class="cv-lookup-notice"
+        data-testid="cv-lookup-notice"
+    >
+        <p id="cv-lookup-error" role="alert">
+            Could not check whether a CV is attached. Check your connection and
+            try again.
+        </p>
+        <button type="button" @click="$emit('retryStatus')">
+            Retry CV lookup
         </button>
     </div>
 
@@ -186,5 +221,25 @@ function onChange(event: Event) {
     font-size: 12px;
     font-weight: 500;
     color: var(--border-color);
+}
+
+.cv-lookup-notice {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-color);
+}
+
+.cv-lookup-notice p {
+    margin: 0 0 8px;
+}
+
+.cv-lookup-notice button {
+    padding: 8px 12px;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
 }
 </style>

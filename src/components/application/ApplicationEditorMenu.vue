@@ -2,12 +2,16 @@
 import { CoverLetterAction } from '@/components/coverLetter';
 import CvFileInput from '@/components/CvFileInput.vue';
 import CvUploadNotice from './CvUploadNotice.vue';
-import type { CvUploadNotice as CvUploadState } from '@/lib/cvUpload';
+import type {
+    CvLookupState,
+    CvUploadNotice as CvUploadState,
+} from '@/lib/cvUpload';
 
 withDefaults(
     defineProps<{
         letterDone: boolean;
         cvUploaded: boolean;
+        cvLookupState?: CvLookupState;
         cvUploadNotice?: CvUploadState | null;
         documentDownloadBusy?: boolean;
     }>(),
@@ -20,6 +24,7 @@ defineEmits<{
     downloadCoverLetter: [];
     downloadCv: [];
     retryCvUpload: [];
+    retryCvLookup: [];
 }>();
 </script>
 
@@ -39,8 +44,10 @@ defineEmits<{
 
         <CvFileInput
             :uploaded="cvUploaded"
+            :lookup-state="cvLookupState"
             @fileSelected="$emit('fileSelected', $event)"
             @download="$emit('downloadCv')"
+            @retry-status="$emit('retryCvLookup')"
         />
 
         <CvUploadNotice

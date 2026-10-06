@@ -1,5 +1,12 @@
-import { ref, shallowRef } from 'vue';
-import { getJson, postFormData } from './api';
+import { computed, ref, shallowRef } from 'vue';
+import { ApiError, getJson, postFormData } from './api';
+
+export type CvLookupState =
+    | 'unknown'
+    | 'loading'
+    | 'missing'
+    | 'available'
+    | 'error';
 
 export type CvUploadNotice = {
     phase: 'pending' | 'error' | 'success';
@@ -15,7 +22,8 @@ type Selection = { session: Session; file: File };
 
 /** One editor owns its selected File and serial upload queue. */
 export function createCvUpload() {
-    const uploaded = ref(false);
+    const lookupState = ref<CvLookupState>('unknown');
+    const uploaded = computed(() => lookupState.value === 'available');
     const notice = shallowRef<CvUploadNotice | null>(null);
     let session: Session | null = null;
     let selection: Selection | null = null;
@@ -26,21 +34,37 @@ export function createCvUpload() {
     }
 
     async function checkStatus(context: Session) {
-        let exists = false;
+        lookupState.value = 'loading';
+        let result: CvLookupState;
         try {
             await getJson(`/cv/${context.key}/status`);
-            exists = true;
-        } catch {
-            // Initial status failures retain the existing unavailable state.
+            result = 'available';
+        } catch (error) {
+            // The server returns two known 404 details. A missing job cannot
+            // have an attachment yet; an unexpected 404 is a lookup failure.
+            result =
+                error instanceof ApiError &&
+                error.status === 404 &&
+                ['Job not found', 'CV not found'].includes(
+                    error.serverError ?? error.message,
+                )
+                    ? 'missing'
+                    : 'error';
         }
-        if (session === context && !context.uploaded) uploaded.value = exists;
+        if (session === context && !context.uploaded)
+            lookupState.value = result;
+    }
+
+    function retryStatus() {
+        if (!session || lookupState.value !== 'error') return;
+        void checkStatus(session);
     }
 
     function close() {
         session = null;
         selection = null;
         notice.value = null;
-        uploaded.value = false;
+        lookupState.value = 'unknown';
     }
 
     function open(key: string, ensureJob: () => Promise<boolean>) {
@@ -68,7 +92,7 @@ export function createCvUpload() {
             // serial upload starts, but must never acknowledge that newer file.
             if (session === intent.session) {
                 intent.session.uploaded = true;
-                uploaded.value = true;
+                lookupState.value = 'available';
             }
             if (!current(intent)) return;
             notice.value = {
@@ -115,5 +139,14 @@ export function createCvUpload() {
         start(selection);
     }
 
-    return { uploaded, notice, open, close, select, retry };
+    return {
+        uploaded,
+        lookupState,
+        notice,
+        open,
+        close,
+        select,
+        retry,
+        retryStatus,
+    };
 }

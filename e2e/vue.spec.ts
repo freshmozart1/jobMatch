@@ -117,7 +117,14 @@ async function loadPopulatedMatchPage(
         });
     }
     await page.route('**/cv/*/status', async (route) => {
-        await route.fulfill({ status: 404 });
+        await route.fulfill({
+            status: 404,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message: 'Error checking CV status',
+                error: 'CV not found',
+            }),
+        });
     });
     await page.goto('/');
 
@@ -246,6 +253,94 @@ test('keeps the card and like controls visible on mobile portrait', async ({
         'sticky',
     );
 });
+
+for (const failure of ['http', 'network'] as const) {
+    test(`recovers a ${failure} CV lookup without claiming an attachment is missing`, async ({
+        page,
+    }) => {
+        await loadPopulatedMatchPage(page, { width: 360, height: 640 });
+        const attempts: Route[] = [];
+        await page.route('**/cv/*/status', async (route) => {
+            attempts.push(route);
+            if (attempts.length === 1) {
+                if (failure === 'network')
+                    await route.abort('internetdisconnected');
+                else
+                    await route.fulfill({
+                        status: 500,
+                        contentType: 'application/json',
+                        body: JSON.stringify({
+                            message: 'Error checking CV status',
+                            error: 'Internal server error',
+                        }),
+                    });
+            }
+        });
+        await page
+            .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+            .click();
+        const editor = page.locator('.editor');
+        await expect(editor).toContainText('CV status unavailable');
+        await expect(editor).not.toContainText('Attach a PDF file');
+        await expect(editor.getByRole('alert')).toContainText(
+            'Could not check whether a CV is attached',
+        );
+        const download = editor.getByRole('button', {
+            name: 'Download CV',
+            exact: true,
+        });
+        await expect(download).toBeDisabled();
+        const retry = editor.getByRole('button', { name: 'Retry CV lookup' });
+        await expect(retry).toBeVisible();
+        await retry.click();
+        await expect.poll(() => attempts.length).toBe(2);
+        await expect(editor).toContainText('Checking for an attached CV');
+        await expect(retry).toHaveCount(0);
+        await expect(download).toBeDisabled();
+        await attempts[1].fulfill({
+            status: 200,
+            body: JSON.stringify({ message: 'CV exists' }),
+        });
+        await expect(editor).toContainText('PDF attached');
+        await expect(editor.getByRole('alert')).toHaveCount(0);
+        await expect(download).toBeEnabled();
+        const widths = await editor.evaluate((element) => ({
+            client: element.clientWidth,
+            scroll: element.scrollWidth,
+        }));
+        expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+    });
+}
+
+for (const error of ['Job not found', 'CV not found']) {
+    test(`recognizes the routine ${error} CV status response`, async ({
+        page,
+    }) => {
+        await loadPopulatedMatchPage(page, { width: 390, height: 844 });
+        await page.route('**/cv/*/status', async (route) => {
+            await route.fulfill({
+                status: 404,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    message: 'Error checking CV status',
+                    error,
+                }),
+            });
+        });
+        await page
+            .getByRole('button', { name: `Open ${APPLICATION_EDITOR_NAME}` })
+            .click();
+        const editor = page.locator('.editor');
+        await expect(editor).toContainText('Attach a PDF file');
+        await expect(editor.getByRole('alert')).toHaveCount(0);
+        await expect(
+            editor.getByRole('button', { name: 'Retry CV lookup' }),
+        ).toHaveCount(0);
+        await expect(
+            editor.getByRole('button', { name: 'Download CV', exact: true }),
+        ).toBeDisabled();
+    });
+}
 
 test('keeps live progress and populated controls inside a mobile viewport', async ({
     page,

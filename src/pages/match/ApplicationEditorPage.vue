@@ -45,7 +45,11 @@ function abortRevision() {
 }
 
 const cvUpload = createCvUpload();
-const { uploaded: cvUploaded, notice: cvUploadNotice } = cvUpload;
+const {
+    uploaded: cvUploaded,
+    lookupState: cvLookupState,
+    notice: cvUploadNotice,
+} = cvUpload;
 
 const letterDone = computed(() => text.value.trim().length > 0);
 
@@ -540,11 +544,13 @@ const statusLabel = computed(() => {
             v-if="view === 'menu'"
             :letter-done="letterDone"
             :cv-uploaded="cvUploaded"
+            :cv-lookup-state="cvLookupState"
             :cv-upload-notice="cvUploadNotice"
             :document-download-busy="documentDownloadBusy"
             @open-letter="view = 'letter'"
             @file-selected="cvUpload.select"
             @retry-cv-upload="cvUpload.retry"
+            @retry-cv-lookup="cvUpload.retryStatus"
             @download="downloadApplication"
             @download-cover-letter="downloadCoverLetter"
             @download-cv="downloadCv"
