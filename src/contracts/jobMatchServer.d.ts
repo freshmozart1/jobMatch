@@ -1,0 +1,123 @@
+export type LinkedInUrlVariant = 'jobPage' | 'jobSearchPage';
+
+export type CompanyAddress = {
+    streetAddress: string;
+    city: string;
+    postalCode: string;
+    countryCode: string;
+};
+
+export type ScrapedJob = {
+    sourceHostname: string;
+    sourceJobId?: string;
+    sourceUrl: string;
+    title: string;
+    company: string;
+    location?: string;
+    descriptionText?: string;
+    postedAt?: string;
+    scrapedAt: string;
+    tags?: string[];
+    duplicateKey: string;
+    companyAddresses: CompanyAddress[];
+    embedding: TextEmbedding;
+    match?: number;
+};
+
+export type ScrapeStreamFrame =
+    | { type: 'job'; job: ScrapedJob }
+    | {
+          type: 'progress';
+          keyword: string;
+          stage: 'loading';
+          discovered: number;
+      }
+    | {
+          type: 'progress';
+          keyword: string;
+          stage: 'scanning';
+          current: number;
+          total: number;
+          failed: number;
+          dropped: number;
+      }
+    | {
+          type: 'error';
+          error: string;
+          reason: string;
+          keyword?: string;
+      };
+
+export type TextEmbedding = number[];
+
+export type CoverLetterSegmentName =
+    | 'subject'
+    | 'salutation'
+    | 'introduction'
+    | 'mainBody'
+    | 'conclusion'
+    | 'greetings';
+
+export type CoverLetterSegment = {
+    text: string;
+    embedding: TextEmbedding | null;
+};
+
+export type StoredCoverLetter = Record<
+    CoverLetterSegmentName,
+    CoverLetterSegment
+> & {
+    jobDuplicateKey?: string;
+    // Authoritative autosaved draft. Absent on legacy/generated segmented letters.
+    coverLetterText?: string;
+};
+
+export type StoredCv = {
+    jobId: string;
+    filePath: string;
+};
+
+export type StoredCertificate = {
+    jobId: string;
+    filePath: string;
+    originalName: string;
+    mimeType: string;
+};
+
+export type StoredUser = {
+    name: string;
+    email: string;
+    tel: string;
+    address: CompanyAddress;
+};
+
+export type CreateJobInDatabaseRequestBody = {
+    job: ScrapedJob;
+    like: boolean;
+};
+
+export type StoredScrapedJob = ScrapedJob & {
+    like: boolean;
+};
+
+export type CalculateTokensRequestBody = {
+    text: string;
+    model?: string | undefined;
+};
+
+export type CoverLetterAsTextRequestBody = {
+    coverLetterText: string;
+    jobDuplicateKey?: string;
+};
+
+export type ReviseCoverLetterAsTextRequestBody = {
+    selectedText: string;
+    instruction: string;
+    coverLetterText: string;
+    job: {
+        title: string;
+        company: string;
+        location?: string;
+        description?: string;
+    };
+};

@@ -1,28 +1,7 @@
-import type { ScrapedJob } from '@/components/jobCard/types';
+import type { ScrapeStreamFrame } from '@/contracts/jobMatchServer';
 
-export type ScrapeProgressFrame =
-    | {
-          type: 'progress';
-          keyword: string;
-          stage: 'loading';
-          discovered: number;
-      }
-    | {
-          type: 'progress';
-          keyword: string;
-          stage: 'scanning';
-          current: number;
-          total: number;
-          failed: number;
-          dropped: number;
-      };
-
-export type ScrapeStreamFrame =
-    | { type: 'job'; job: ScrapedJob }
-    | ScrapeProgressFrame
-    | {
-          type: 'error';
-          error: string;
-          reason: string;
-          keyword?: string;
-      };
+export type { ScrapeStreamFrame } from '@/contracts/jobMatchServer';
+export type ScrapeProgressFrame = Extract<
+    ScrapeStreamFrame,
+    { type: 'progress' }
+>;

@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.12
+
+### Fixed
+
+- Job and scrape-stream types now come from a byte-exact snapshot of the
+  canonical server declarations, pinned by full commit and SHA-256. The
+  compiler treats `sourceJobId`, `location`, `postedAt` and `tags` as optional
+  and preserves the discriminated stream without changing runtime behavior.
+  Offline integrity and isolated declaration checks reject hand edits,
+  unresolved types and external dependencies; explicit synchronization
+  refreshes the reviewed server pin (#94).
+
+### Internal
+
+- Added wire-contract compiler/rendering regressions and Node integrity tests,
+  plus an offline contract CI workflow and an explicit Fallow test-entry role.
+  Documented synchronization and upstream verification commands.
+
 ## v0.5.11
 
 ### Fixed

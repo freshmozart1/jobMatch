@@ -9,7 +9,13 @@ import pluginPlaywright from 'eslint-plugin-playwright';
 import pluginVitest from '@vitest/eslint-plugin';
 import skipFormatting from 'eslint-config-prettier/flat';
 
-const ignoredFiles = ['**/dist/**', '**/dist-ssr/**', '**/coverage/**'];
+const ignoredFiles = [
+    '**/dist/**',
+    '**/dist-ssr/**',
+    '**/coverage/**',
+    // Byte-exact upstream declarations are validated by check:wire-contract.
+    'src/contracts/jobMatchServer.d.ts',
+];
 const vueFiles = globSync('**/*.vue', {
     cwd: import.meta.dirname,
     ignore: ['**/node_modules/**', '**/.git/**', ...ignoredFiles],
@@ -79,7 +85,8 @@ export default defineConfig(
                   ...tseslint.configs.disableTypeChecked,
                   rules: {
                       ...tseslint.configs.disableTypeChecked.rules,
-                      '@typescript-eslint/consistent-type-imports': 'off' as const,
+                      '@typescript-eslint/consistent-type-imports':
+                          'off' as const,
                   },
               },
           ]
@@ -127,6 +134,7 @@ export default defineConfig(
                 {
                     assertFunctionNames: [
                         'expect',
+                        'expectTypeOf',
                         'expectEndpointsCalled',
                         'expectSearchStopped',
                     ],
