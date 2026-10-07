@@ -353,8 +353,8 @@ Playwright starts the server for you (`npm run dev` locally, `npm run preview`
 on CI). Locally it reuses a server that is already running; on CI it always
 starts its own (`reuseExistingServer: !process.env.CI`). The base URL is
 `http://localhost:5173` locally and `http://localhost:4173` on CI. The e2e
-specs drive the real app, so they expect a jobMatchServer at
-`http://localhost:3000`.
+specs drive the real app with synthetic jobs and mocked API responses, so they
+do not require a running jobMatchServer.
 
 ## Project layout
 

@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import MatchPage from '@/pages/match/MatchPage.vue';
 import JobCardContainer from '@/components/jobCard/JobCardContainer.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { createSseResponse } from './testUtils';
+import { createDeferred as deferred, createSseResponse } from './testUtils';
 
 const jobs: ScrapedJob[] = ['A', 'B', 'C'].map((key, index) => ({
     sourceHostname: 'example.com',
@@ -29,15 +29,7 @@ const jobs: ScrapedJob[] = ['A', 'B', 'C'].map((key, index) => ({
     match: 0.9 - index * 0.1,
 }));
 type Payload = { job: ScrapedJob; like: boolean };
-function deferred<T>() {
-    let resolve!: (value: T) => void;
-    let reject!: (error: Error) => void;
-    const promise = new Promise<T>((yes, no) => {
-        resolve = yes;
-        reject = no;
-    });
-    return { promise, resolve, reject };
-}
+
 const json = (status = 200) =>
     new Response(JSON.stringify({ error: 'Synthetic failure' }), { status });
 const stream = (values = jobs) =>

@@ -4,7 +4,6 @@ import JobCardCompany from './JobCardCompany.vue';
 import JobCardCosineSimilarity from './JobCardCosineSimilarity.vue';
 import JobCardDescription from './JobCardDescription.vue';
 import JobCardTags from './JobCardTags.vue';
-import JobCardTitle from './JobCardTitle.vue';
 import type { ScrapedJob } from './types';
 
 const props = defineProps<{
@@ -44,7 +43,7 @@ const rotation = computed(() => (props.dragOffsetX ?? 0) * 0.06);
         >
             Nope
         </div>
-        <JobCardTitle :title="job.title" />
+        <h2 class="job-card__title">{{ job.title }}</h2>
         <JobCardCompany :company="job.company" :source-url="job.sourceUrl" />
         <JobCardCosineSimilarity
             v-if="typeof job.match === 'number'"
@@ -79,6 +78,10 @@ const rotation = computed(() => (props.dragOffsetX ?? 0) * 0.06);
 .job-card--dragging {
     transition: none;
     cursor: grabbing;
+}
+
+.job-card__title {
+    width: 100%;
 }
 
 .stamp {

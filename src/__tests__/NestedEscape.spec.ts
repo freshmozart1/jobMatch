@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import MatchPage from '@/pages/match/MatchPage.vue';
 import { APPLICATION_EDITOR_DIALOG_ID } from '@/components/application';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { createSseResponse } from './testUtils';
+import { createDeferred as deferred, createSseResponse } from './testUtils';
 
 const job: ScrapedJob = {
     sourceHostname: 'example.com',
@@ -22,15 +22,6 @@ const job: ScrapedJob = {
 };
 const draft = 'Selected sentence. Remaining sentence.';
 const storageKey = `jobmatch.coverletter.${job.duplicateKey}`;
-function deferred<T>() {
-    let resolve!: (value: T) => void;
-    let reject!: (error: unknown) => void;
-    const promise = new Promise<T>((yes, no) => {
-        resolve = yes;
-        reject = no;
-    });
-    return { promise, resolve, reject };
-}
 
 describe('nested revision Escape in the full MatchPage', () => {
     let wrapper: ReturnType<typeof mount<typeof MatchPage>>;

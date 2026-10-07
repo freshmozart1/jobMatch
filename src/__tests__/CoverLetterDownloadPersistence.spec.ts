@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import ApplicationEditorPage from '@/pages/match/ApplicationEditorPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import { createDeferred as deferredResponse } from './testUtils';
 
 const job: ScrapedJob = {
     sourceHostname: 'example.com',
@@ -32,19 +33,12 @@ const documentCases = [
 ];
 const json = (body: unknown = {}, status = 200) =>
     new Response(JSON.stringify(body), { status });
-function deferredResponse() {
-    let resolve!: (response: Response) => void;
-    const promise = new Promise<Response>((r) => {
-        resolve = r;
-    });
-    return { promise, resolve };
-}
 
 describe('download the latest persisted cover letter', () => {
     let wrapper: ReturnType<typeof mount>;
     let uploads: {
         text: string;
-        response: ReturnType<typeof deferredResponse>;
+        response: ReturnType<typeof deferredResponse<Response>>;
     }[];
     let downloads: string[];
     let anchorClick: ReturnType<typeof vi.spyOn>;
@@ -65,7 +59,7 @@ describe('download the latest persisted cover letter', () => {
             'fetch',
             vi.fn(async (input: string, init?: RequestInit) => {
                 if (input.endsWith('/cover-letters/upload/text')) {
-                    const response = deferredResponse();
+                    const response = deferredResponse<Response>();
                     const body = JSON.parse(init!.body as string) as {
                         coverLetterText: string;
                     };

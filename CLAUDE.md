@@ -99,7 +99,7 @@ positions, while failed/dropped counts are summed for the user-facing warning.
 - First run requires: `npx playwright install`
 - Dev: base URL is `http://localhost:5173`; CI/built: `http://localhost:4173`
 - Tests auto-start the dev server (or `npm run preview` on CI)
-- API calls in tests are hardcoded to `http://localhost:3000`
+- Tests mock the exercised API endpoints with synthetic data; no running jobMatchServer is required
 - Run a single browser: `npm run test:e2e -- --project=chromium`
 - Debug mode: `npm run test:e2e -- --debug`
 

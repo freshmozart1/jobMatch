@@ -6,6 +6,7 @@ import {
     createCoverLetterSaves,
 } from '@/lib/coverLetterSaves';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import { createDeferred as deferred } from './testUtils';
 
 const job: ScrapedJob = {
     sourceHostname: 'example.com',
@@ -33,13 +34,7 @@ const generatedRecord = {
 type StoredRecord = typeof generatedRecord;
 const json = (body: unknown = {}, status = 200) =>
     new Response(JSON.stringify(body), { status });
-function deferred() {
-    let resolve!: (response: Response) => void;
-    const promise = new Promise<Response>((r) => {
-        resolve = r;
-    });
-    return { promise, resolve };
-}
+
 const documentCases = [
     { button: '[aria-label="Download cover letter"]', path: '/cover-letters/' },
     { button: '.cl-download', path: '/application/' },
@@ -48,9 +43,12 @@ const documentCases = [
 describe('acknowledged generated cover-letter persistence', () => {
     let wrapper: ReturnType<typeof mount>;
     let saves: ReturnType<typeof createCoverLetterSaves>;
-    let generation: ReturnType<typeof deferred>;
-    let jobRequests: ReturnType<typeof deferred>[];
-    let uploads: { text: string; response: ReturnType<typeof deferred> }[];
+    let generation: ReturnType<typeof deferred<Response>>;
+    let jobRequests: ReturnType<typeof deferred<Response>>[];
+    let uploads: {
+        text: string;
+        response: ReturnType<typeof deferred<Response>>;
+    }[];
     let stored: StoredRecord | null;
     let jobStored: boolean;
     let downloads: { path: string; record: StoredRecord | null }[];
@@ -101,7 +99,7 @@ describe('acknowledged generated cover-letter persistence', () => {
             () => {},
         );
         saves = createCoverLetterSaves();
-        generation = deferred();
+        generation = deferred<Response>();
         jobRequests = [];
         uploads = [];
         stored = null;
@@ -113,7 +111,7 @@ describe('acknowledged generated cover-letter persistence', () => {
                 if (input.endsWith('/cover-letters/create/text'))
                     return generation.promise;
                 if (input.endsWith('/jobs/create')) {
-                    const response = deferred();
+                    const response = deferred<Response>();
                     jobRequests.push(response);
                     const result = await response.promise;
                     if (result.ok) jobStored = true;
@@ -123,7 +121,7 @@ describe('acknowledged generated cover-letter persistence', () => {
                     const body = JSON.parse(init!.body as string) as {
                         coverLetterText: string;
                     };
-                    const response = deferred();
+                    const response = deferred<Response>();
                     uploads.push({ text: body.coverLetterText, response });
                     const result = await response.promise;
                     if (result.ok)
