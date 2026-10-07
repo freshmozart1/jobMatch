@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## v0.5.14
+
+### Internal
+
+- Share description parsing between job cards and the cover-letter editor,
+  inline the single-use job title component, and simplify drag events to the
+  progress their consumer uses (#122).
+- Consolidate repeated test fixtures, classify typed Vue files in one lint
+  configuration pass, and remove obsolete Cypress and commented scaffold
+  configuration. Correct the browser-test documentation to describe mocked
+  API responses (#122).
+
 ## v0.5.13
 
 ### Fixed
