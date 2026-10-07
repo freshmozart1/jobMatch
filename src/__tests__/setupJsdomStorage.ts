@@ -30,7 +30,7 @@ function isUsableStorage(storage: unknown): storage is Storage {
 function createMemoryStorage(): Storage {
     const data = new Map<string, string>();
     return {
-        getItem: (key) => (data.has(key) ? (data.get(key) ?? null) : null),
+        getItem: (key) => data.get(key) ?? null,
         setItem: (key, value) => {
             data.set(key, String(value));
         },

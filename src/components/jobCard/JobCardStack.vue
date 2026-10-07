@@ -38,13 +38,6 @@ const nextJob = computed(() => props.jobs[1]);
 const nextScale = computed(() => 0.92 + dragProgress.value * 0.08);
 const nextOpacity = computed(() => 0.5 + dragProgress.value * 0.5);
 
-function onDrag(payload: {
-    progress: number;
-    direction: 'left' | 'right' | 'none';
-}) {
-    dragProgress.value = payload.progress;
-}
-
 function onSwipe(direction: 'left' | 'right') {
     if (currentJob.value) emit('like', currentJob.value, direction === 'right');
     dragProgress.value = 0;
@@ -68,7 +61,7 @@ function onSwipe(direction: 'left' | 'right') {
                 :key="currentJob.duplicateKey"
                 :job="currentJob"
                 :application-editor-open="applicationEditorOpen"
-                @drag="onDrag"
+                @drag="dragProgress = $event"
                 @swipe="onSwipe"
                 @edit="emit('edit', currentJob, $event)"
             />

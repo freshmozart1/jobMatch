@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import { parseDescription } from '@/lib/parseDescription';
 import type { CoverLetterRevisionSelection } from './types';
 
 const props = withDefaults(
@@ -137,27 +138,6 @@ watch(
 const safeUrl = computed(() =>
     props.job.sourceUrl.startsWith('https://') ? props.job.sourceUrl : null,
 );
-
-type Segment = { text: string; bold: boolean };
-
-function parseDescription(raw: string): Segment[] {
-    const segments: Segment[] = [];
-    const pattern = /\*\*(.+?)\*\*/gs;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(raw)) !== null) {
-        if (match.index > lastIndex)
-            segments.push({
-                text: raw.slice(lastIndex, match.index),
-                bold: false,
-            });
-        segments.push({ text: match[1] ?? '', bold: true });
-        lastIndex = pattern.lastIndex;
-    }
-    if (lastIndex < raw.length)
-        segments.push({ text: raw.slice(lastIndex), bold: false });
-    return segments;
-}
 </script>
 
 <template>

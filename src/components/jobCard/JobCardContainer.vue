@@ -13,7 +13,7 @@ withDefaults(
 );
 
 const emit = defineEmits<{
-    drag: [payload: { progress: number; direction: 'left' | 'right' | 'none' }];
+    drag: [progress: number];
     swipe: [direction: 'left' | 'right'];
     edit: [trigger: HTMLButtonElement];
 }>();
@@ -30,16 +30,6 @@ const committedDirection = ref<'left' | 'right' | null>(null);
 const progress = computed(() =>
     Math.min(Math.abs(dragOffsetX.value) / maxDragDistance, 1),
 );
-
-const direction = computed<'left' | 'right' | 'none'>(() => {
-    if (dragOffsetX.value > 0) {
-        return 'right';
-    }
-    if (dragOffsetX.value < 0) {
-        return 'left';
-    }
-    return 'none';
-});
 
 const likeOpacity = computed(() => {
     if (dragOffsetX.value > 0) {
@@ -61,15 +51,6 @@ const dislikeOpacity = computed(() => {
     return 0.33;
 });
 
-function emitDrag(
-    payload: { progress: number; direction: 'left' | 'right' | 'none' } = {
-        progress: progress.value,
-        direction: direction.value,
-    },
-) {
-    emit('drag', payload);
-}
-
 function onPointerDown(event: PointerEvent) {
     if (committedDirection.value) {
         return;
@@ -85,7 +66,7 @@ function onPointerMove(event: PointerEvent) {
         return;
     }
     dragOffsetX.value = event.clientX - startX.value;
-    emitDrag();
+    emit('drag', progress.value);
 }
 
 function commitSwipe(direction: 'left' | 'right') {
@@ -96,7 +77,7 @@ function commitSwipe(direction: 'left' | 'right') {
     committedDirection.value = direction;
     dragOffsetX.value =
         direction === 'right' ? offscreenDistance : -offscreenDistance;
-    emitDrag({ progress: 1, direction });
+    emit('drag', 1);
 }
 
 function onPointerEnd(event: PointerEvent) {
@@ -111,7 +92,7 @@ function onPointerEnd(event: PointerEvent) {
         commitSwipe(dragOffsetX.value > 0 ? 'right' : 'left');
     } else {
         dragOffsetX.value = 0;
-        emitDrag();
+        emit('drag', progress.value);
     }
 }
 

@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import MatchPage from '@/pages/match/MatchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
-import { createSseResponse, swipeTopCard } from './testUtils';
+import {
+    createDeferred as deferredResponse,
+    createSseResponse,
+    swipeTopCard,
+} from './testUtils';
 
 const job: ScrapedJob = {
     sourceHostname: 'example.com',
@@ -25,20 +29,12 @@ function jsonResponse(body: unknown = {}, status = 200): Response {
     return new Response(JSON.stringify(body), { status });
 }
 
-function deferredResponse() {
-    let resolve!: (response: Response) => void;
-    const promise = new Promise<Response>((resolvePromise) => {
-        resolve = resolvePromise;
-    });
-    return { promise, resolve };
-}
-
 describe('cover-letter saves across editor lifetimes', () => {
     let wrapper: ReturnType<typeof mount>;
     let uploads: {
         text: string;
         key: string;
-        response: ReturnType<typeof deferredResponse>;
+        response: ReturnType<typeof deferredResponse<Response>>;
     }[];
     let storedText: Map<string, string>;
 
@@ -62,7 +58,7 @@ describe('cover-letter saves across editor lifetimes', () => {
                         coverLetterText: string;
                         jobDuplicateKey: string;
                     };
-                    const response = deferredResponse();
+                    const response = deferredResponse<Response>();
                     uploads.push({
                         text: body.coverLetterText,
                         key: body.jobDuplicateKey,

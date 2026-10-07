@@ -91,5 +91,23 @@ describe('JobCardDescription', () => {
                 'End is Bold',
             );
         });
+
+        it('preserves multiline bold, unmatched delimiters, and HTML as text', () => {
+            const wrapper = mount(JobCardDescription, {
+                props: {
+                    descriptionText:
+                        '<img src=x> **Bold\n<strong>text</strong>** end **unmatched',
+                },
+            });
+            const description = wrapper.find('.job-card__description');
+            expect(description.text()).toBe(
+                '<img src=x> Bold\n<strong>text</strong> end **unmatched',
+            );
+            expect(description.find('strong').text()).toBe(
+                'Bold\n<strong>text</strong>',
+            );
+            expect(description.find('img').exists()).toBe(false);
+            expect(description.findAll('strong')).toHaveLength(1);
+        });
     });
 });

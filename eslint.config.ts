@@ -24,10 +24,12 @@ const hasTypedScript = (file: string) =>
     /<script\b[^>]*\blang\s*=\s*(['"])ts\1/i.test(
         readFileSync(resolve(import.meta.dirname, file), 'utf8'),
     );
-const typedVueFiles = vueFiles.filter(hasTypedScript).map(escapePath);
-const templateOnlyVueFiles = vueFiles
-    .filter((file) => !hasTypedScript(file))
-    .map(escapePath);
+const typedVueFiles: string[] = [];
+const templateOnlyVueFiles: string[] = [];
+for (const file of vueFiles) {
+    const files = hasTypedScript(file) ? typedVueFiles : templateOnlyVueFiles;
+    files.push(escapePath(file));
+}
 
 export default defineConfig(
     {

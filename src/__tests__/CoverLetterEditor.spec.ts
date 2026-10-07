@@ -112,6 +112,22 @@ describe('CoverLetterEditor', () => {
             const wrapper = mountEditor({ descriptionText: '' });
             expect(wrapper.find('.cl-paper__jobdesc').exists()).toBe(false);
         });
+
+        it('preserves multiline bold, unmatched delimiters, and HTML as text', () => {
+            const wrapper = mountEditor({
+                descriptionText:
+                    '<img src=x> **Bold\n<strong>text</strong>** end **unmatched',
+            });
+            const description = wrapper.find('.cl-paper__jobdesc');
+            expect(description.text()).toBe(
+                '<img src=x> Bold\n<strong>text</strong> end **unmatched',
+            );
+            expect(description.find('strong').text()).toBe(
+                'Bold\n<strong>text</strong>',
+            );
+            expect(description.find('img').exists()).toBe(false);
+            expect(description.findAll('strong')).toHaveLength(1);
+        });
     });
 
     describe('word count', () => {

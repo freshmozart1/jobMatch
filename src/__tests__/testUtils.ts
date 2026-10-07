@@ -1,5 +1,15 @@
 import type { mount } from '@vue/test-utils';
 
+export function createDeferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
+
 export function swipeTopCard(wrapper: ReturnType<typeof mount>) {
     const card = wrapper.find('.job-card-stack__current .job-card').element;
     card.dispatchEvent(new MouseEvent('pointerdown', { clientX: 0 }));

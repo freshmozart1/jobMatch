@@ -6,6 +6,7 @@ import {
     createCoverLetterSaves,
 } from '@/lib/coverLetterSaves';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import { createDeferred as deferred } from './testUtils';
 
 const job: ScrapedJob = {
     sourceHostname: 'example.com',
@@ -27,20 +28,10 @@ const errorMessage = 'Could not generate a cover letter. Please try again.';
 const json = (body: unknown = {}, status = 200) =>
     new Response(JSON.stringify(body), { status });
 
-function deferred() {
-    let resolve!: (response: Response) => void;
-    let reject!: (error: Error) => void;
-    const promise = new Promise<Response>((resolvePromise, rejectPromise) => {
-        resolve = resolvePromise;
-        reject = rejectPromise;
-    });
-    return { promise, resolve, reject };
-}
-
 describe('cover-letter generation failure recovery', () => {
     let wrapper: ReturnType<typeof mount>;
     let saves: ReturnType<typeof createCoverLetterSaves>;
-    let generations: ReturnType<typeof deferred>[];
+    let generations: ReturnType<typeof deferred<Response>>[];
     let uploads: string[];
     let failRestoration: boolean;
 
@@ -89,7 +80,7 @@ describe('cover-letter generation failure recovery', () => {
             'fetch',
             vi.fn(async (input: string, init?: RequestInit) => {
                 if (input.endsWith('/cover-letters/create/text')) {
-                    const response = deferred();
+                    const response = deferred<Response>();
                     generations.push(response);
                     return response.promise;
                 }

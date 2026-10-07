@@ -6,6 +6,7 @@ import {
     createCoverLetterSaves,
 } from '@/lib/coverLetterSaves';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import { createDeferred as deferred } from './testUtils';
 
 const job: ScrapedJob = {
     sourceHostname: 'example.com',
@@ -24,13 +25,6 @@ const job: ScrapedJob = {
 };
 const json = (body: unknown = {}, status = 200) =>
     new Response(JSON.stringify(body), { status });
-function deferred() {
-    let resolve!: (response: Response) => void;
-    const promise = new Promise<Response>((r) => {
-        resolve = r;
-    });
-    return { promise, resolve };
-}
 
 describe('generation and manual draft persistence', () => {
     let wrapper: ReturnType<typeof mount>;
@@ -38,9 +32,12 @@ describe('generation and manual draft persistence', () => {
     let uploads: {
         key: string;
         text: string;
-        response: ReturnType<typeof deferred>;
+        response: ReturnType<typeof deferred<Response>>;
     }[];
-    let generations: { key: string; response: ReturnType<typeof deferred> }[];
+    let generations: {
+        key: string;
+        response: ReturnType<typeof deferred<Response>>;
+    }[];
     let stored: Map<string, string>;
 
     async function open(currentJob = job) {
@@ -94,7 +91,7 @@ describe('generation and manual draft persistence', () => {
                     const body = JSON.parse(init!.body as string) as {
                         duplicateKey: string;
                     };
-                    const response = deferred();
+                    const response = deferred<Response>();
                     generations.push({ key: body.duplicateKey, response });
                     const result = await response.promise;
                     if (result.ok) {
@@ -110,7 +107,7 @@ describe('generation and manual draft persistence', () => {
                         coverLetterText: string;
                         jobDuplicateKey: string;
                     };
-                    const response = deferred();
+                    const response = deferred<Response>();
                     uploads.push({
                         key: body.jobDuplicateKey,
                         text: body.coverLetterText,

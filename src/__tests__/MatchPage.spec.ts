@@ -12,7 +12,7 @@ import {
 import MatchPage from '@/pages/match/MatchPage.vue';
 import type { ScrapedJob } from '@/components/jobCard/types';
 import type { ScrapeStreamFrame } from '@/pages/match/scrapeStream';
-import { createSseResponse, swipeTopCard } from './testUtils';
+import { createDeferred, createSseResponse, swipeTopCard } from './testUtils';
 
 const testJobs: ScrapedJob[] = [
     {
@@ -150,17 +150,6 @@ async function mountWithDeduplicatedJobStreamed() {
     });
 
     return { wrapper, stream };
-}
-
-function createDeferred<T>() {
-    let resolve!: (value: T) => void;
-    let reject!: (reason?: unknown) => void;
-    const promise = new Promise<T>((promiseResolve, promiseReject) => {
-        resolve = promiseResolve;
-        reject = promiseReject;
-    });
-
-    return { promise, resolve, reject };
 }
 
 function mockFetch(playwrightHandler?: () => Promise<Response>) {

@@ -4,6 +4,7 @@ import ApplicationEditorPage from '@/pages/match/ApplicationEditorPage.vue';
 import CvFileInput from '@/components/CvFileInput.vue';
 import { createCvUpload } from '@/lib/cvUpload';
 import type { ScrapedJob } from '@/components/jobCard/types';
+import { createDeferred as deferred } from './testUtils';
 
 const job: ScrapedJob = {
     sourceHostname: 'example.com',
@@ -22,15 +23,7 @@ const job: ScrapedJob = {
 const jobB = { ...job, duplicateKey: 'example:B', title: 'Engineer B' };
 const pdf = (name: string) =>
     new File(['%PDF-1.4 synthetic ' + name], name, { type: 'application/pdf' });
-function deferred<T>() {
-    let resolve!: (value: T) => void;
-    let reject!: (reason: unknown) => void;
-    const promise = new Promise<T>((yes, no) => {
-        resolve = yes;
-        reject = no;
-    });
-    return { promise, resolve, reject };
-}
+
 const response = (status = 201) =>
     new Response(
         JSON.stringify({
